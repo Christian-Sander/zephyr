@@ -154,7 +154,7 @@ if(CONFIG_BT_SILABS_SIWX91X)
   )
 endif() # CONFIG_BT_SILABS_SIWX91X
 
-if(CONFIG_WISECONNECT_NETWORK_STACK)
+if(CONFIG_SILABS_SIWX91X_NWP)
   zephyr_compile_definitions(
     SLI_SI91X_ENABLE_OS
     SL_SI91X_SI917_RAM_MEM_CONFIG=2
@@ -197,9 +197,10 @@ if(CONFIG_WISECONNECT_NETWORK_STACK)
   zephyr_library_sources_ifdef(CONFIG_SIWX91X_FIRMWARE_UPGRADE
     ${WISECONNECT_DIR}/components/device/silabs/si91x/wireless/firmware_upgrade/firmware_upgradation.c
   )
-endif() # CONFIG_WISECONNECT_NETWORK_STACK
+  zephyr_include_directories(.)
+endif() # CONFIG_SILABS_SIWX91X_NWP
 
-if(CONFIG_SOC_SILABS_SLEEPTIMER)
+if(CONFIG_SILABS_SISDK_SLEEPTIMER)
   zephyr_include_directories(
     ${SISDK_DIR}/platform/service/sleeptimer/inc
     ${SISDK_DIR}/platform/service/sleeptimer/src
@@ -215,7 +216,7 @@ if(CONFIG_SOC_SILABS_SLEEPTIMER)
     SL_CODE_COMPONENT_SLEEPTIMER=sleeptimer
     SL_CODE_COMPONENT_HAL_SYSRTC=hal_sysrtc
   )
-endif() # CONFIG_SOC_SILABS_SLEEPTIMER
+endif() # CONFIG_SILABS_SISDK_SLEEPTIMER
 
 if(CONFIG_SOC_SIWX91X_PM_BACKEND_PMGR)
   zephyr_library_sources(

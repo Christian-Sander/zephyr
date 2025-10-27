@@ -10,6 +10,7 @@ config MODEM_CELLULAR
 	select MODEM_PIPE
 	select MODEM_PIPELINK
 	select MODEM_BACKEND_UART
+	select UART_USE_RUNTIME_CONFIGURE
 	select RING_BUFFER
 	select NET_L2_PPP_OPTION_MRU
 	select NET_L2_PPP_PAP
@@ -38,6 +39,15 @@ config MODEM_CELLULAR
 	  features.
 
 if MODEM_CELLULAR
+
+config MODEM_CELLULAR_INIT_PRIORITY
+	int "Cellular modem driver initialization priority"
+	default 79
+	range 0 99
+	help
+	  Driver initialization priority for cellular modem drivers.
+	  Defaults to less than GNSS_INIT_PRIORITY, as LTE modems often
+	  integrate a GNSS modem.
 
 config MODEM_CELLULAR_APN
 	string "Static APN"

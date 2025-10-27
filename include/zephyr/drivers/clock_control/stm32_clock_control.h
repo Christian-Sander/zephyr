@@ -41,9 +41,10 @@
 #include <zephyr/dt-bindings/clock/stm32l0_clock.h>
 #elif defined(CONFIG_SOC_SERIES_STM32L1X)
 #include <zephyr/dt-bindings/clock/stm32l1_clock.h>
-#elif defined(CONFIG_SOC_SERIES_STM32L4X) || \
-	defined(CONFIG_SOC_SERIES_STM32L5X)
+#elif defined(CONFIG_SOC_SERIES_STM32L4X)
 #include <zephyr/dt-bindings/clock/stm32l4_clock.h>
+#elif defined(CONFIG_SOC_SERIES_STM32L5X)
+#include <zephyr/dt-bindings/clock/stm32l5_clock.h>
 #elif defined(CONFIG_SOC_SERIES_STM32MP2X)
 #include <zephyr/dt-bindings/clock/stm32mp2_clock.h>
 #elif defined(CONFIG_SOC_SERIES_STM32WBX)
@@ -174,6 +175,11 @@
 
 #define STM32_TIMG_PRESCALER	DT_PROP(DT_NODELABEL(rcc), timg_prescaler)
 #endif /* rcc node compatible st_stm32n6_rcc and okay */
+
+/** clock 48MHz node related symbols */
+#if DT_NODE_HAS_COMPAT_STATUS(DT_NODELABEL(clk48), st_stm32_clock_mux, okay)
+#define STM32_CK48_ENABLED	1
+#endif
 
 /** PLL node related symbols */
 
@@ -566,6 +572,10 @@
 #if DT_NODE_HAS_COMPAT_STATUS(DT_NODELABEL(clk_msi), st_stm32_msi_clock, okay)
 #define STM32_MSI_ENABLED	1
 #define STM32_MSI_PLL_MODE	DT_PROP(DT_NODELABEL(clk_msi), msi_pll_mode)
+#endif
+
+#if defined(CONFIG_SOC_SERIES_STM32L4X) && STM32_MSI_PLL_MODE && !STM32_LSE_ENABLED
+#error "On STM32L4 series, MSI PLL mode requires LSE to be enabled"
 #endif
 
 #if DT_NODE_HAS_COMPAT_STATUS(DT_NODELABEL(clk_msis), st_stm32u5_msi_clock, okay) || \
