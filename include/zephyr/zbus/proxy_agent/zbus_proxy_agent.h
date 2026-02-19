@@ -185,6 +185,9 @@ struct zbus_proxy_agent_config {
 					  CONFIG_ZBUS_PROXY_AGENT_CHANNEL_NAME_SIZE + 16];         \
 	static char _name##_cleanup_msgq_buf[CONFIG_ZBUS_PROXY_AGENT_CLEANUP_QUEUE_SIZE *          \
 					       sizeof(uint32_t)];                                  \
+	static K_THREAD_STACK_DEFINE(_name##_thread_stack, CONFIG_ZBUS_PROXY_AGENT_STACK_SIZE);		\
+	static struct k_thread _name##_thread;										\
+	static k_tid_t _name##_thread_id;  												\
 	/* Forward declare the shadow validator function */                                        \
 	bool _name##_shadow_validator(const void *msg, size_t msg_size);                           \
 	struct zbus_proxy_agent_config _name##_config = {                                          \
@@ -224,10 +227,17 @@ struct zbus_proxy_agent_config {
 		.serialization_buffer_size = sizeof(_name##_serial_buf),                           \
 	};                                                                                         \
 	ZBUS_MSG_SUBSCRIBER_DEFINE(_name##_subscriber);                                            \
-	K_THREAD_DEFINE(_name##_thread_id, CONFIG_ZBUS_PROXY_AGENT_STACK_SIZE,                     \
-			zbus_proxy_agent_thread, &_name##_config, &_name##_subscriber, NULL,       \
-			CONFIG_ZBUS_PROXY_AGENT_PRIORITY, 0, 0);                                   \
-	_ZBUS_PROXY_AGENT_GENERATE_SHADOW_VALIDATOR(_name);
+	_ZBUS_PROXY_AGENT_GENERATE_SHADOW_VALIDATOR(_name);								\
+	\
+	static int _name##_init(void)                                 \
+	{                                                                                          \
+		_name##_thread_id = k_thread_create(&_name##_thread, _name##_thread_stack,         \
+			K_THREAD_STACK_SIZEOF(_name##_thread_stack), zbus_proxy_agent_thread, (void*)&_name##_config, \
+			(void*)&_name##_subscriber, NULL, CONFIG_ZBUS_PROXY_AGENT_PRIORITY, 0, K_NO_WAIT);                \
+		k_thread_start(_name##_thread_id);                                               \
+		return 0;																	\
+	}																		\
+	SYS_INIT(_name##_init, APPLICATION, CONFIG_ZBUS_CHANNELS_SYS_INIT_PRIORITY)
 
 /**
  * @brief Add a channel to the proxy agent.
@@ -296,8 +306,7 @@ struct zbus_proxy_agent_config {
  * @param subscriber Pointer to the zbus observer that the proxy agent listens to.
  * @return negative error code on failure.
  */
-int zbus_proxy_agent_thread(struct zbus_proxy_agent_config *config,
-			    const struct zbus_observer *subscriber);
+void zbus_proxy_agent_thread(void* p1, void* p2, void* p3);
 
 /** @cond INTERNAL_HIDDEN */
 

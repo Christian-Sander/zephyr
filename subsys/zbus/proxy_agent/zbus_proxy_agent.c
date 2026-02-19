@@ -692,9 +692,10 @@ static void process_cleanup_msgq(struct zbus_proxy_agent_config *config)
 	}
 }
 
-int zbus_proxy_agent_thread(struct zbus_proxy_agent_config *config,
-			    const struct zbus_observer *subscriber)
+void zbus_proxy_agent_thread(void* p1, void* p2, void* p3)
 {
+	struct zbus_proxy_agent_config *config = p1;
+	struct zbus_observer *subscriber = p2;
 	int ret;
 
 	_ZBUS_ASSERT(config != NULL, "Invalid proxy agent configuration for thread");
@@ -712,20 +713,20 @@ int zbus_proxy_agent_thread(struct zbus_proxy_agent_config *config,
 	if (ret < 0) {
 		LOG_ERR("Failed to set receive callback for proxy agent %s: %d",
 			config->backend.name, ret);
-		return ret;
+		return;
 	}
 
 	ret = zbus_proxy_agent_tracking_pool_init(config);
 	if (ret < 0) {
 		LOG_ERR("Failed to initialize sent message pool for proxy agent %s: %d",
 			config->backend.name, ret);
-		return ret;
+		return;
 	}
 
 	ret = zbus_proxy_agent_init(config);
 	if (ret < 0) {
 		LOG_ERR("Failed to initialize proxy agent %s: %d", config->backend.name, ret);
-		return ret;
+		return;
 	}
 
 	struct k_poll_event events[3] = {
@@ -760,5 +761,4 @@ int zbus_proxy_agent_thread(struct zbus_proxy_agent_config *config,
 		events[1].state = K_POLL_STATE_NOT_READY;
 		events[2].state = K_POLL_STATE_NOT_READY;
 	}
-	return 0;
 }
