@@ -17,107 +17,71 @@
 
 #include <infineon_kconfig.h>
 #include <zephyr/drivers/clock_control/clock_control_ifx_cat1.h>
-#include <zephyr/dt-bindings/clock/ifx_clock_source_common.h>
 
 #include <cy_sysclk.h>
 #include <cy_systick.h>
 
 struct ifx_peri_clock_data {
-	struct ifx_cat1_resource_inst hw_resource;
 	struct ifx_cat1_clock clock;
 	uint16_t divider;
-	CySCB_Type *reg_addr;
+	uint8_t frac_divider;
+	uint8_t div_type;
 };
 
-#if defined(CY_IP_MXPERI) || defined(CY_IP_M0S8PERI)
-
-#define IFX_PCLK_GROUP(clkdst) 0
-#if (CY_IP_MXTCPWM_INSTANCES > 1) || (CY_IP_M0S8TCPWM_INSTANCES > 1)
-#define IFX_TCPWM0_PCLK_CLOCK0 PCLK_TCPWM0_CLOCKS0
-#define IFX_TCPWM1_PCLK_CLOCK0 PCLK_TCPWM1_CLOCKS0
-#else
-#define IFX_TCPWM0_PCLK_CLOCK0 PCLK_TCPWM_CLOCKS0
-#endif
-#define IFX_SCB0_PCLK_CLOCK PCLK_SCB0_CLOCK
-
-#elif defined(CY_IP_MXSPERI)
-
-#define IFX_PCLK_GROUP(clkdst) ((uint8_t)((uint32_t)(clkdst) >> 8))
-#define IFX_TCPWM0_PCLK_CLOCK0 PCLK_TCPWM0_CLOCK_COUNTER_EN0
-#define IFX_TCPWM1_PCLK_CLOCK0 PCLK_TCPWM0_CLOCK_COUNTER_EN256
-#define IFX_SCB0_PCLK_CLOCK    PCLK_SCB0_CLOCK_SCB_EN
-#define IFX_SCB1_PCLK_CLOCK    PCLK_SCB1_CLOCK_SCB_EN
-#define IFX_SCB5_PCLK_CLOCK    PCLK_SCB5_CLOCK_SCB_EN
-#endif
-
-en_clk_dst_t ifx_cat1_scb_get_clock_index(uint32_t block_num)
+static inline en_clk_dst_t peri_pclk_build_en_clk_dst(uint8_t output, uint8_t group,
+						      uint8_t instance)
 {
-	en_clk_dst_t clk;
-/* PSOC6A256K does not have SCB 3 */
-#if defined(CY_DEVICE_PSOC6A256K)
-	if (block_num < 3) {
-		clk = (en_clk_dst_t)((uint32_t)IFX_SCB0_PCLK_CLOCK + block_num);
-	} else {
-		clk = (en_clk_dst_t)((uint32_t)IFX_SCB0_PCLK_CLOCK + block_num - 1);
-	}
-#elif defined(CONFIG_SOC_FAMILY_INFINEON_EDGE)
-	if (block_num == 0) {
-		clk = (en_clk_dst_t)((uint32_t)IFX_SCB0_PCLK_CLOCK);
-	} else if (block_num == 1) {
-		clk = (en_clk_dst_t)((uint32_t)IFX_SCB1_PCLK_CLOCK);
-	} else {
-		clk = (en_clk_dst_t)((uint32_t)IFX_SCB0_PCLK_CLOCK + block_num - 1);
-	}
-#else
-	clk = (en_clk_dst_t)((uint32_t)IFX_SCB0_PCLK_CLOCK + block_num);
+	en_clk_dst_t clk_dst;
+
+	clk_dst = output;
+#if defined(COMPONENT_CAT1B) || defined(COMPONENT_CAT1C) || defined(CONFIG_SOC_FAMILY_INFINEON_EDGE)
+	/* These devices pack instance, group, and output together in the en_clk_dst_t.  Group and
+	 * Instance are used by the enable_divider and set_divider functions to determine which
+	 * clock is being referenced.
+	 */
+	clk_dst |= ((uint32_t)group << PERI_PCLK_GR_NUM_Pos);
+	clk_dst |= ((uint32_t)instance << PERI_PCLK_INST_NUM_Pos);
 #endif
-
-	return clk;
-}
-
-en_clk_dst_t ifx_cat1_tcpwm_get_clock_index(uint32_t block_num, uint32_t channel)
-{
-	en_clk_dst_t clk = -EINVAL;
-
-	if (block_num == 0) {
-		/* block_num 0 is 32-bit tcpwm instances */
-		clk = (en_clk_dst_t)((uint32_t)IFX_TCPWM0_PCLK_CLOCK0 + channel);
-#if (CY_IP_MXTCPWM_INSTANCES > 1) || (CY_IP_M0S8TCPWM_INSTANCES > 1) || (CY_IP_MXSPERI)
-	} else if (block_num == 1) {
-		/* block_num 1 is 16-bit tcwpm instances */
-		clk = (en_clk_dst_t)((uint32_t)IFX_TCPWM1_PCLK_CLOCK0 + channel);
-#endif
-	} else {
-		/* Current support does not account for block_num other than 0 or 1 */
-		__ASSERT(block_num == 0 || block_num == 1,
-			 "Invalid block_num used for tcpwm clock index.");
-#if (CY_IP_MXTCPWM_INSTANCES == 1) || (CY_IP_M0S8TCPWM_INSTANCES == 1) || (CY_IP_MXSPERI)
-		__ASSERT(block_num == 0, "Invalid block_num used for tcpwm clock index.");
-#endif
-	}
-
-	return clk;
+	return clk_dst;
 }
 
 static int ifx_cat1_peri_clock_init(const struct device *dev)
 {
 	struct ifx_peri_clock_data *const data = dev->data;
+	en_clk_dst_t clk_dst;
 
-	if (data->hw_resource.type == IFX_RSC_SCB) {
-		en_clk_dst_t clk_idx = ifx_cat1_scb_get_clock_index(data->hw_resource.block_num);
+	/* PDL calls to set the and enable peri clock divider use the en_clk_dst_t
+	 * enumeration. This enumeration contains the peripheral clock instance, peripheral
+	 * clock group, and the peripheral connection.  We don't know what the peripheral
+	 * connection is in the clock control driver, so we will use a value of 0.  The
+	 * specific peripheral connection is not needed in the underlying pdl enable and
+	 * clock configuration calls.
+	 */
+#if defined(COMPONENT_CAT1B) || defined(COMPONENT_CAT1C) || defined(CONFIG_SOC_FAMILY_INFINEON_EDGE)
+	clk_dst = peri_pclk_build_en_clk_dst(0, data->clock.group, data->clock.instance);
+#else
+	/* For PSOC4, clk_dst is simply 0 since we don't have instance/group fields */
+	clk_dst = 0;
+#endif
 
-		ifx_cat1_utils_peri_pclk_set_divider(clk_idx, &data->clock, data->divider - 1);
-		ifx_cat1_utils_peri_pclk_assign_divider(clk_idx, &data->clock);
-		ifx_cat1_utils_peri_pclk_enable_divider(clk_idx, &data->clock);
-	} else if (data->hw_resource.type == IFX_RSC_TCPWM) {
-		en_clk_dst_t clk_idx = ifx_cat1_tcpwm_get_clock_index(
-			data->hw_resource.block_num, data->hw_resource.channel_num);
-
-		ifx_cat1_utils_peri_pclk_set_divider(clk_idx, &data->clock, data->divider - 1);
-		ifx_cat1_utils_peri_pclk_assign_divider(clk_idx, &data->clock);
-		ifx_cat1_utils_peri_pclk_enable_divider(clk_idx, &data->clock);
+	/* Note: This function sets up the divider and enables it.  Each peripheral that needs to
+	 * use the clock must connect to the clock by calling:
+	 * ifx_cat1_utils_peri_pclk_assign_divider()
+	 */
+	if ((data->div_type == CY_SYSCLK_DIV_8_BIT) || (data->div_type == CY_SYSCLK_DIV_16_BIT)) {
+		if (CY_RSLT_SUCCESS != ifx_cat1_utils_peri_pclk_set_divider(clk_dst,
+						&data->clock, data->divider - 1)) {
+			return -EIO;
+		}
 	} else {
-		return -EINVAL;
+		if (CY_RSLT_SUCCESS != ifx_cat1_utils_peri_pclk_set_frac_divider(clk_dst,
+				&data->clock, data->divider - 1, data->frac_divider)) {
+			return -EIO;
+		}
+	}
+
+	if (CY_RSLT_SUCCESS != ifx_cat1_utils_peri_pclk_enable_divider(clk_dst, &data->clock)) {
+		return -EIO;
 	}
 
 	return 0;
@@ -130,6 +94,15 @@ static int ifx_cat1_peri_clock_init(const struct device *dev)
 							  DT_INST_PROP_BY_IDX(n, peri_group, 1),   \
 							  DT_INST_PROP(n, div_type)),              \
 		.channel = DT_INST_PROP(n, channel),                                               \
+		.instance = DT_INST_PROP_BY_IDX(n, peri_group, 0),                                 \
+		.group = DT_INST_PROP_BY_IDX(n, peri_group, 1),                                    \
+	},
+#elif defined(CY_IP_MXPERI) || defined(CY_IP_M0S8PERI)
+/* PSOC4 devices - struct ifx_cat1_clock only has block and channel fields */
+#define PERI_CLOCK_INIT(n)                                                                         \
+	.clock = {                                                                                 \
+		.block = DT_INST_PROP(n, div_type),                                                \
+		.channel = DT_INST_PROP(n, channel),                                               \
 	},
 #else
 #define PERI_CLOCK_INIT(n)                                                                         \
@@ -137,18 +110,24 @@ static int ifx_cat1_peri_clock_init(const struct device *dev)
 		.block = IFX_CAT1_PERIPHERAL_GROUP_ADJUST(DT_INST_PROP_BY_IDX(n, peri_group, 1),   \
 							  DT_INST_PROP(n, div_type)),              \
 		.channel = DT_INST_PROP(n, channel),                                               \
+		.instance = DT_INST_PROP_BY_IDX(n, peri_group, 0),                                 \
+		.group = DT_INST_PROP_BY_IDX(n, peri_group, 1),                                    \
 	},
 #endif
 
 #define INFINEON_CAT1_PERI_CLOCK_INIT(n)                                                           \
 	static struct ifx_peri_clock_data ifx_cat1_peri_clock##n##_data = {                        \
+		.div_type = DT_INST_PROP(n, div_type),                                             \
 		.divider = DT_INST_PROP(n, clock_div),                                             \
-		.hw_resource = {.type = DT_INST_PROP(n, resource_type),                            \
-				.block_num = DT_INST_PROP(n, resource_instance),                   \
-				.channel_num = DT_INST_PROP_OR(n, resource_channel, 0)},           \
+		.frac_divider = DT_INST_PROP_OR(n, div_frac_value, 0),                             \
 		PERI_CLOCK_INIT(n)};                                                               \
                                                                                                    \
-	DEVICE_DT_INST_DEFINE(n, &ifx_cat1_peri_clock_init, NULL, &ifx_cat1_peri_clock##n##_data,  \
-			      NULL, PRE_KERNEL_1, CONFIG_CLOCK_CONTROL_INIT_PRIORITY, NULL);
+	static int ifx_cat1_peri_clock_init_##n(const struct device *dev)                          \
+	{                                                                                          \
+		return ifx_cat1_peri_clock_init(dev);                                              \
+	}                                                                                          \
+	DEVICE_DT_INST_DEFINE(n, &ifx_cat1_peri_clock_init_##n, NULL,                              \
+		&ifx_cat1_peri_clock##n##_data, NULL, PRE_KERNEL_1,                                \
+		CONFIG_CLOCK_CONTROL_INIT_PRIORITY, NULL);
 
 DT_INST_FOREACH_STATUS_OKAY(INFINEON_CAT1_PERI_CLOCK_INIT)

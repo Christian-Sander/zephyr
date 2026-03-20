@@ -13,8 +13,22 @@ config FLOAT_HARD
 	bool "Hard-float calling convention"
 	default y
 	depends on FPU
+	depends on !RISCV_ISA_RV32E
+	depends on RISCV_ISA_EXT_F
 	help
 	  This option enables the hard-float calling convention.
+	  Adds eight floating-point argument registers.
+
+config RISCV_USE_MSAVE_RESTORE
+	bool "Compile with -msave-restore to reduce some code footprint"
+	help
+	  The `-msave-restore` option enables the compiler to emit calls to library
+	  routines `__riscv_save_X` and `__riscv_restore_X` for preserving the
+	  callee-saved registers instead of inlining them in every function. This
+	  can reduce code size in some large functions. However, it introduces extra
+	  branching overhead, which may impact the performance in hot paths.
+
+	  If supported by your SoC, the `Zcmp` ISA extension should be preferred.
 
 choice RISCV_GP_PURPOSE
 	prompt "Purpose of the global pointer (GP) register"
@@ -262,13 +276,6 @@ config CLIC_SUPPORT_INTERRUPT_LEVEL
 	  levels. This option handles interrupt level in ISR to ensure proper
 	  nested ISR exits.
 
-config RISCV_SOC_EXCEPTION_FROM_IRQ
-	bool
-	help
-	  Option selected by SoCs that require a custom mechanism to check if
-	  an exception is the result of an interrupt or not. If selected,
-	  __soc_is_irq() needs to be implemented by the SoC.
-
 config RISCV_SOC_INTERRUPT_INIT
 	bool "SOC-based interrupt initialization"
 	help
@@ -417,6 +424,16 @@ config PMP_NO_LOCK_GLOBAL
 	  Configure the PMP entries as unlocked (L=0) to implement PMP relative
 	  features. This allows application to dynamically reconfigure PMP
 	  entries without requiring hard reset.
+
+config PMP_UNLOCK_ROM_FOR_DEBUG
+	bool "Unlock ROM region for debugger access"
+	default n
+	help
+	  When enabled, the ROM region PMP entry is configured without
+	  the lock bit (L=0), allowing debuggers running in machine mode
+	  to set breakpoints and read instructions. NULL pointer guards
+	  and stack guards remain locked to catch critical bugs during
+	  development. Only enable for debug builds.
 
 endif #RISCV_PMP
 

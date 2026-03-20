@@ -9,6 +9,7 @@
 #include <zephyr/drivers/can/can_mcan.h>
 #include <zephyr/drivers/clock_control/stm32_clock_control.h>
 #include <zephyr/drivers/clock_control.h>
+#include <zephyr/drivers/counter.h>
 #include <zephyr/drivers/pinctrl.h>
 #include <zephyr/kernel.h>
 #include <zephyr/sys/__assert.h>
@@ -173,6 +174,9 @@ struct can_stm32fd_config {
 	void (*config_irq)(void);
 	const struct pinctrl_dev_config *pcfg;
 	uint8_t clock_divider;
+#ifdef CONFIG_CAN_RX_TIMESTAMP
+	const struct device *external_timestamp_counter_dev;
+#endif
 };
 
 static inline uint16_t can_stm32fd_remap_reg(uint16_t reg)
@@ -409,11 +413,6 @@ static int can_stm32fd_get_core_clock(const struct device *dev, uint32_t *rate)
 	const struct can_stm32fd_config *stm32fd_cfg = mcan_cfg->custom;
 	const struct device *const clk = DEVICE_DT_GET(STM32_CLOCK_CONTROL_NODE);
 
-	ARG_UNUSED(dev);
-	if (!device_is_ready(clk)) {
-		return -ENODEV;
-	}
-
 	if (IS_ENABLED(STM32_CANFD_DOMAIN_CLOCK_SUPPORT) && (stm32fd_cfg->pclk_len > 1)) {
 		if (clock_control_get_rate(clk,
 			 (clock_control_subsys_t) &stm32fd_cfg->pclken[1],
@@ -445,10 +444,6 @@ static int can_stm32fd_clock_enable(const struct device *dev)
 	const struct can_mcan_config *mcan_cfg = dev->config;
 	const struct can_stm32fd_config *stm32fd_cfg = mcan_cfg->custom;
 	const struct device *const clk = DEVICE_DT_GET(STM32_CLOCK_CONTROL_NODE);
-
-	if (!device_is_ready(clk)) {
-		return -ENODEV;
-	}
 
 	if (IS_ENABLED(STM32_CANFD_DOMAIN_CLOCK_SUPPORT) && (stm32fd_cfg->pclk_len > 1)) {
 		ret = clock_control_configure(clk,
@@ -519,6 +514,29 @@ static int can_stm32fd_init(const struct device *dev)
 	if (ret != 0) {
 		return ret;
 	}
+
+
+#ifdef CONFIG_CAN_RX_TIMESTAMP
+	if (stm32fd_cfg->external_timestamp_counter_dev != NULL) {
+		if (!device_is_ready(stm32fd_cfg->external_timestamp_counter_dev)) {
+			LOG_ERR("Timestamp counter device not ready");
+			return -ENODEV;
+		}
+
+		ret = counter_start(stm32fd_cfg->external_timestamp_counter_dev);
+		if (ret < 0) {
+			LOG_ERR("Failed to start timestamp counter (%d)", ret);
+			return ret;
+		}
+
+		/* Use External Timestamp counter (TSS=2) */
+		ret = can_mcan_write_reg(dev, CAN_MCAN_TSCC, FIELD_PREP(CAN_MCAN_TSCC_TSS, 0x2));
+		if (ret != 0) {
+			LOG_ERR("Failed to write TSCC register");
+			return ret;
+		}
+	}
+#endif /* CONFIG_CAN_RX_TIMESTAMP */
 
 	stm32fd_cfg->config_irq();
 
@@ -609,7 +627,10 @@ static const struct can_mcan_ops can_stm32fd_ops = {
 		.pclk_len = DT_INST_NUM_CLOCKS(inst),				\
 		.config_irq = config_can_##inst##_irq,				\
 		.pcfg = PINCTRL_DT_INST_DEV_CONFIG_GET(inst),			\
-		.clock_divider = DT_INST_PROP_OR(inst, clk_divider, 0)		\
+		.clock_divider = DT_INST_PROP_OR(inst, clk_divider, 0),		\
+		IF_ENABLED(CONFIG_CAN_RX_TIMESTAMP,				\
+			   (.external_timestamp_counter_dev = DEVICE_DT_GET_OR_NULL( \
+					DT_INST_PHANDLE(inst, external_timestamp_counter)),)) \
 	};									\
 										\
 	static const struct can_mcan_config can_mcan_cfg_##inst =		\

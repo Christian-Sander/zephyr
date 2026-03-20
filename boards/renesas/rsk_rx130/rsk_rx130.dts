@@ -120,6 +120,7 @@
 	pinctrl-0 = <&i2c0_default>;
 	pinctrl-names = "default";
 	clock-frequency = <DT_FREQ_K(400)>;
+	status = "okay";
 };
 
 &ctsu {
@@ -196,7 +197,7 @@
 
 		storage_partition: partition@0 {
 			label = "storage";
-			reg = <0X0 DT_SIZE_K(8)>;
+			reg = <0x0 DT_SIZE_K(8)>;
 		};
 	};
 };

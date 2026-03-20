@@ -49,6 +49,7 @@
 
 #include "addr_internal.h"
 #include "adv.h"
+#include "classic/br.h"
 #include "common/hci_common_internal.h"
 #include "common/bt_str.h"
 #include "common/rpa.h"
@@ -66,10 +67,6 @@
 #include "scan.h"
 #include "settings.h"
 #include "smp.h"
-
-#if defined(CONFIG_BT_CLASSIC)
-#include "classic/br.h"
-#endif
 
 #if defined(CONFIG_BT_DF)
 #include "direction_internal.h"
@@ -343,29 +340,6 @@ void bt_hci_host_num_completed_packets(struct net_buf *buf)
 }
 #endif /* defined(CONFIG_BT_HCI_ACL_FLOW_CONTROL) */
 
-struct net_buf *bt_hci_cmd_create(uint16_t opcode, uint8_t param_len)
-{
-	struct bt_hci_cmd_hdr *hdr;
-	struct net_buf *buf;
-
-	LOG_DBG("opcode 0x%04x param_len %u", opcode, param_len);
-
-	buf = bt_hci_cmd_alloc(K_FOREVER);
-	if (!buf) {
-		return NULL;
-	}
-
-	LOG_DBG("buf %p", buf);
-
-	hdr = net_buf_push(buf, sizeof(*hdr));
-	hdr->opcode = sys_cpu_to_le16(opcode);
-	hdr->param_len = param_len;
-
-	net_buf_push_u8(buf, BT_HCI_H4_CMD);
-
-	return buf;
-}
-
 struct net_buf *bt_hci_cmd_alloc(k_timeout_t timeout)
 {
 	struct net_buf *buf;
@@ -392,7 +366,15 @@ int bt_hci_cmd_send(uint16_t opcode, struct net_buf *buf)
 {
 	struct bt_hci_cmd_hdr *hdr;
 
-	if (!buf) {
+	if (buf != NULL) {
+		/* Check for sufficient headeroom, which can only happen if the user passes a
+		 * buffer that was allocated incorrectly, i.e. through some other means than
+		 * bt_hci_cmd_alloc().
+		 */
+		if (net_buf_headroom(buf) < sizeof(uint8_t) + sizeof(*hdr)) {
+			return -EINVAL;
+		}
+	} else {
 		buf = bt_hci_cmd_alloc(K_FOREVER);
 		if (!buf) {
 			return -ENOBUFS;
@@ -403,16 +385,11 @@ int bt_hci_cmd_send(uint16_t opcode, struct net_buf *buf)
 
 	cmd(buf)->opcode = opcode;
 
-	/* TODO: Remove this condition when bt_hci_cmd_create() has been removed (after its
-	 * deprecation period)
-	 */
-	if (net_buf_headroom(buf) >= sizeof(uint8_t) + sizeof(*hdr)) {
-		hdr = net_buf_push(buf, sizeof(*hdr));
-		hdr->opcode = sys_cpu_to_le16(opcode);
-		hdr->param_len = buf->len - sizeof(*hdr);
+	hdr = net_buf_push(buf, sizeof(*hdr));
+	hdr->opcode = sys_cpu_to_le16(opcode);
+	hdr->param_len = buf->len - sizeof(*hdr);
 
-		net_buf_push_u8(buf, BT_HCI_H4_CMD);
-	}
+	net_buf_push_u8(buf, BT_HCI_H4_CMD);
 
 	/* Host Number of Completed Packets can ignore the ncmd value
 	 * and does not generate any cmd complete/status events.
@@ -2079,8 +2056,8 @@ static void le_conn_update_complete(struct net_buf *buf)
 					LOG_WRN("latency exceeds the valid range 0x%04x",
 						conn->le.latency);
 				}
-				if (!IN_RANGE(conn->le.timeout, BT_HCI_LE_SUPERVISON_TIMEOUT_MIN,
-					      BT_HCI_LE_SUPERVISON_TIMEOUT_MAX)) {
+				if (!IN_RANGE(conn->le.timeout, BT_HCI_LE_SUPERVISION_TIMEOUT_MIN,
+					      BT_HCI_LE_SUPERVISION_TIMEOUT_MAX)) {
 					LOG_WRN("supv_timeout exceeds the valid range 0x%04x",
 						conn->le.timeout);
 				}
@@ -2792,8 +2769,8 @@ void bt_hci_le_subrate_change_event(struct net_buf *buf)
 				LOG_WRN("continuation_number exceeds the valid range %d",
 					conn->le.subrate.continuation_number);
 			}
-			if (!IN_RANGE(conn->le.timeout, BT_HCI_LE_SUPERVISON_TIMEOUT_MIN,
-				      BT_HCI_LE_SUPERVISON_TIMEOUT_MAX)) {
+			if (!IN_RANGE(conn->le.timeout, BT_HCI_LE_SUPERVISION_TIMEOUT_MIN,
+				      BT_HCI_LE_SUPERVISION_TIMEOUT_MAX)) {
 				LOG_WRN("supervision_timeout exceeds the valid range 0x%04x",
 					conn->le.timeout);
 			}
@@ -2856,8 +2833,8 @@ void bt_hci_le_conn_rate_change_event(struct net_buf *buf)
 				LOG_WRN("continuation_number exceeds the valid range %d",
 					conn->le.subrate.continuation_number);
 			}
-			if (!IN_RANGE(conn->le.timeout, BT_HCI_LE_SUPERVISON_TIMEOUT_MIN,
-				      BT_HCI_LE_SUPERVISON_TIMEOUT_MAX)) {
+			if (!IN_RANGE(conn->le.timeout, BT_HCI_LE_SUPERVISION_TIMEOUT_MIN,
+				      BT_HCI_LE_SUPERVISION_TIMEOUT_MAX)) {
 				LOG_WRN("supervision_timeout exceeds the valid range 0x%04x",
 					conn->le.timeout);
 			}
@@ -3071,17 +3048,21 @@ static const struct event_handler meta_events[] = {
 	EVENT_HANDLER(BT_HCI_EVT_LE_CS_READ_REMOTE_SUPPORTED_CAPABILITIES_COMPLETE,
 		      bt_hci_le_cs_read_remote_supported_capabilities_complete,
 		      sizeof(struct bt_hci_evt_le_cs_read_remote_supported_capabilities_complete)),
+	EVENT_HANDLER(BT_HCI_EVT_LE_CS_READ_REMOTE_SUPPORTED_CAPABILITIES_COMPLETE_V2,
+		      bt_hci_le_cs_read_remote_supported_capabilities_complete_v2,
+		      sizeof(
+		      struct bt_hci_evt_le_cs_read_remote_supported_capabilities_complete_v2)),
 	EVENT_HANDLER(BT_HCI_EVT_LE_CS_READ_REMOTE_FAE_TABLE_COMPLETE,
 		      bt_hci_le_cs_read_remote_fae_table_complete,
 		      sizeof(struct bt_hci_evt_le_cs_read_remote_fae_table_complete)),
 	EVENT_HANDLER(BT_HCI_EVT_LE_CS_CONFIG_COMPLETE, bt_hci_le_cs_config_complete_event,
 		      sizeof(struct bt_hci_evt_le_cs_config_complete)),
 	EVENT_HANDLER(BT_HCI_EVT_LE_CS_SECURITY_ENABLE_COMPLETE,
-			  bt_hci_le_cs_security_enable_complete,
-			  sizeof(struct bt_hci_evt_le_cs_security_enable_complete)),
+		      bt_hci_le_cs_security_enable_complete,
+		      sizeof(struct bt_hci_evt_le_cs_security_enable_complete)),
 	EVENT_HANDLER(BT_HCI_EVT_LE_CS_PROCEDURE_ENABLE_COMPLETE,
-			  bt_hci_le_cs_procedure_enable_complete,
-			  sizeof(struct bt_hci_evt_le_cs_procedure_enable_complete)),
+		      bt_hci_le_cs_procedure_enable_complete,
+		      sizeof(struct bt_hci_evt_le_cs_procedure_enable_complete)),
 	EVENT_HANDLER(BT_HCI_EVT_LE_CS_SUBEVENT_RESULT,
 		      bt_hci_le_cs_subevent_result,
 		      sizeof(struct bt_hci_evt_le_cs_subevent_result)),
@@ -3724,6 +3705,13 @@ static int le_set_event_mask(void)
 	if (IS_ENABLED(CONFIG_BT_CHANNEL_SOUNDING) &&
 	    BT_FEAT_LE_CHANNEL_SOUNDING(bt_dev.le.features)) {
 		mask |= BT_EVT_MASK_LE_CS_READ_REMOTE_SUPPORTED_CAPABILITIES_COMPLETE;
+		/* Only set v2 event mask if controller supports it; v1-only CS controllers
+		 * may reject the Set Event Mask command if an unknown bit is set.
+		 */
+		if (BT_LE_CS_READ_LOCAL_SUPPORTED_CAPABILITIES_V2_SUPPORTED(
+				bt_dev.supported_commands)) {
+			mask |= BT_EVT_MASK_LE_CS_READ_REMOTE_SUPPORTED_CAPABILITIES_COMPLETE_V2;
+		}
 		mask |= BT_EVT_MASK_LE_CS_READ_REMOTE_FAE_TABLE_COMPLETE;
 		mask |= BT_EVT_MASK_LE_CS_CONFIG_COMPLETE;
 		mask |= BT_EVT_MASK_LE_CS_SECURITY_ENABLE_COMPLETE;
@@ -3975,10 +3963,9 @@ static int le_init(void)
 	return  le_set_event_mask();
 }
 
-#if !defined(CONFIG_BT_CLASSIC)
-static int bt_br_init(void)
+static int hci_read_buffer_size(void)
 {
-#if defined(CONFIG_BT_CONN)
+#if !defined(CONFIG_BT_CLASSIC) && defined(CONFIG_BT_CONN)
 	struct net_buf *rsp;
 	int err;
 
@@ -3994,11 +3981,10 @@ static int bt_br_init(void)
 
 	read_buffer_size_complete(rsp);
 	net_buf_unref(rsp);
-#endif /* CONFIG_BT_CONN */
+#endif /* !CONFIG_BT_CLASSIC */
 
 	return 0;
 }
-#endif /* !defined(CONFIG_BT_CLASSIC) */
 
 static int set_event_mask(void)
 {
@@ -4024,6 +4010,9 @@ static int set_event_mask(void)
 		mask |= BT_EVT_MASK_REMOTE_NAME_REQ_COMPLETE;
 		mask |= BT_EVT_MASK_REMOTE_FEATURES;
 		mask |= BT_EVT_MASK_ROLE_CHANGE;
+#ifdef CONFIG_BT_POWER_MODE_CONTROL
+		mask |= BT_EVT_MASK_MODE_CHANGE;
+#endif /* CONFIG_BT_POWER_MODE_CONTROL */
 		mask |= BT_EVT_MASK_PIN_CODE_REQ;
 		mask |= BT_EVT_MASK_LINK_KEY_REQ;
 		mask |= BT_EVT_MASK_LINK_KEY_NOTIFY;
@@ -4119,7 +4108,8 @@ static const char *vs_hw_platform(uint16_t platform)
 {
 	static const char * const plat_str[] = {
 		"reserved", "Intel Corporation", "Nordic Semiconductor",
-		"NXP Semiconductors" };
+		"NXP Semiconductors", "Espressif Systems"
+	};
 
 	if (platform < ARRAY_SIZE(plat_str)) {
 		return plat_str[platform];
@@ -4130,17 +4120,26 @@ static const char *vs_hw_platform(uint16_t platform)
 
 static const char *vs_hw_variant(uint16_t platform, uint16_t variant)
 {
+#if defined(CONFIG_SOC_FAMILY_NORDIC_NRF)
 	static const char * const nordic_str[] = {
 		"reserved", "nRF51x", "nRF52x", "nRF53x", "nRF54Hx", "nRF54Lx"
 	};
 
-	if (platform != BT_HCI_VS_HW_PLAT_NORDIC) {
-		return "unknown";
-	}
-
-	if (variant < ARRAY_SIZE(nordic_str)) {
+	if (platform == BT_HCI_VS_HW_PLAT_NORDIC && variant < ARRAY_SIZE(nordic_str)) {
 		return nordic_str[variant];
 	}
+#endif
+#if defined(CONFIG_SOC_FAMILY_ESPRESSIF_ESP32)
+	static const char * const esp32_str[] = {
+		"reserved", "ESP32", "ESP32-S3", "ESP32-C2", "ESP32-C3", "ESP32-C6", "ESP32-H2"
+	};
+
+	if (platform == BT_HCI_VS_HW_PLAT_ESPRESSIF && variant < ARRAY_SIZE(esp32_str)) {
+		return esp32_str[variant];
+	}
+#endif
+	ARG_UNUSED(platform);
+	ARG_UNUSED(variant);
 
 	return "unknown";
 }
@@ -4252,6 +4251,22 @@ static void hci_vs_init(void)
 		net_buf_unref(rsp);
 	}
 }
+
+static int hci_vs_write_bd_addr(bt_addr_t *bdaddr)
+{
+	struct bt_hci_cp_vs_write_bd_addr *cp;
+	struct net_buf *buf;
+
+	buf = bt_hci_cmd_alloc(K_FOREVER);
+	if (buf == NULL) {
+		return -ENOBUFS;
+	}
+
+	cp = net_buf_add(buf, sizeof(*cp));
+	bt_addr_copy(&cp->bdaddr, bdaddr);
+
+	return bt_hci_cmd_send_sync(BT_HCI_OP_VS_WRITE_BD_ADDR, buf, NULL);
+}
 #endif /* CONFIG_BT_HCI_VS */
 
 static int hci_init(void)
@@ -4285,7 +4300,11 @@ static int hci_init(void)
 	}
 
 	if (BT_FEAT_BREDR(bt_dev.features)) {
-		err = bt_br_init();
+		if (IS_ENABLED(CONFIG_BT_CLASSIC)) {
+			err = bt_br_init();
+		} else if (IS_ENABLED(CONFIG_BT_CONN)) {
+			err = hci_read_buffer_size();
+		}
 		if (err) {
 			return err;
 		}
@@ -4307,6 +4326,17 @@ static int hci_init(void)
 
 #if defined(CONFIG_BT_HCI_VS)
 	hci_vs_init();
+
+	if (bt_dev.id_count > 0U && bt_dev.id_addr[BT_ID_DEFAULT].type == BT_ADDR_LE_PUBLIC) {
+		if (BT_VS_CMD_WRITE_BD_ADDR(bt_dev.vs_commands)) {
+			err = hci_vs_write_bd_addr(&bt_dev.id_addr[BT_ID_DEFAULT].a);
+			if (err != 0) {
+				return err;
+			}
+		} else if (!IS_ENABLED(CONFIG_BT_HCI_SET_PUBLIC_ADDR)) {
+			return -ENOTSUP;
+		}
+	}
 #endif
 	err = bt_id_init();
 	if (err) {
@@ -4841,6 +4871,14 @@ int bt_set_name(const char *name)
 
 	if (!strcmp(bt_dev.name, name)) {
 		return 0;
+	}
+
+	if (IS_ENABLED(CONFIG_BT_CLASSIC) && atomic_test_bit(bt_dev.flags, BT_DEV_READY)) {
+		err = bt_br_write_local_name(name);
+		if (err != 0) {
+			LOG_ERR("Unable to set local name %d", err);
+			return err;
+		}
 	}
 
 	memcpy(bt_dev.name, name, len);

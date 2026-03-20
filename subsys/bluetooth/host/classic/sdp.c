@@ -4,6 +4,7 @@
 
 /*
  * Copyright (c) 2016 Intel Corporation
+ * Copyright 2024-2026 NXP
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -1673,22 +1674,31 @@ static int bt_sdp_accept(struct bt_conn *conn, struct bt_l2cap_server *server,
 
 void bt_sdp_init(void)
 {
+	__maybe_unused int err;
+
+	static bool initialized;
 	static struct bt_l2cap_server server = {
 		.psm = SDP_PSM,
 		.accept = bt_sdp_accept,
 		.sec_level = BT_SECURITY_L0,
 	};
-	int res;
 
-	res = bt_l2cap_br_server_register(&server);
-	if (res) {
-		LOG_ERR("L2CAP server registration failed with error %d", res);
+	if (initialized) {
+		return;
+	}
+
+	err = bt_l2cap_br_server_register(&server);
+	if ((err != 0) && (err != -EEXIST)) {
+		LOG_ERR("Failed to register SDP L2CAP server (error %d)", err);
+		return;
 	}
 
 	ARRAY_FOR_EACH(bt_sdp_client_pool, i) {
 		/* Locking semaphore initialized to 1 (unlocked) */
 		k_sem_init(&bt_sdp_client_pool[i].sem_lock, 1, 1);
 	}
+
+	initialized = true;
 }
 
 int bt_sdp_register_service(struct bt_sdp_record *service)
@@ -3465,11 +3475,6 @@ static int sdp_attr_parse(struct net_buf_simple *buf,
 	int err;
 	uint8_t type;
 
-	if (nest_level == SDP_DATA_ELEM_NEST_LEVEL_MAX) {
-		LOG_WRN("Maximum nesting level (%u) exceeded", SDP_DATA_ELEM_NEST_LEVEL_MAX);
-		return 0;
-	}
-
 	if (buf->len < sizeof(uint8_t)) {
 		return 0;
 	}
@@ -3479,6 +3484,18 @@ static int sdp_attr_parse(struct net_buf_simple *buf,
 	err = sdp_attr_get_len(type, buf, &len);
 	if (err != 0) {
 		return err;
+	}
+
+	if (len == 0) {
+		LOG_DBG("No valid data found");
+		return 0;
+	}
+
+	if (nest_level == SDP_DATA_ELEM_NEST_LEVEL_MAX) {
+		LOG_WRN("Exceed max nesting level (%u). Ignore ATTR data (len %u)",
+			SDP_DATA_ELEM_NEST_LEVEL_MAX, len);
+		net_buf_simple_pull_mem(buf, len);
+		return 0;
 	}
 
 	/* The following is a data ele sequence, so recursively parse */
@@ -3531,6 +3548,15 @@ static int sdp_attr_parse(struct net_buf_simple *buf,
 out:
 		if (!func(&value, user_data)) {
 			return -ECANCELED;
+		}
+
+		if ((vbuf.len > 0) && sdp_attr_is_seq(vbuf.data[0])) {
+			LOG_DBG("Recursively parse if the following data is a sequence");
+
+			err = sdp_attr_parse(&vbuf, func, user_data, nest_level + 1);
+			if (err != 0) {
+				return err;
+			}
 		}
 
 		if (vbuf.len < sizeof(uint8_t)) {

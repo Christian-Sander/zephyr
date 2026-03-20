@@ -209,7 +209,7 @@ static void i2c_stm32_submit(const struct device *dev, struct rtio_iodev_sqe *io
 	}
 }
 
-static const struct i2c_driver_api api_funcs = {
+static DEVICE_API(i2c, api_funcs) = {
 	.configure = i2c_stm32_configure,
 	.transfer = i2c_stm32_transfer,
 	.get_config = i2c_stm32_get_config,
@@ -232,11 +232,6 @@ static int i2c_stm32_init(const struct device *dev)
 
 	i2c_rtio_init(data->ctx, dev);
 
-	if (!device_is_ready(clk)) {
-		LOG_ERR("clock control device not ready");
-		return -ENODEV;
-	}
-
 	i2c_stm32_activate(dev);
 
 	if (IS_ENABLED(I2C_STM32_DOMAIN_CLOCK_SUPPORT) && (cfg->pclk_len > 1)) {
@@ -252,7 +247,7 @@ static int i2c_stm32_init(const struct device *dev)
 #if defined(CONFIG_SOC_SERIES_STM32F1X)
 	/*
 	 * Force i2c reset for STM32F1 series.
-	 * So that they can enter master mode properly.
+	 * So that they can enter controller mode properly.
 	 * Issue described in ES096 2.14.7
 	 */
 	I2C_TypeDef *i2c = cfg->i2c;

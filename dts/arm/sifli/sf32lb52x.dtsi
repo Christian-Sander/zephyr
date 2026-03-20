@@ -120,6 +120,18 @@
 			};
 		};
 
+		lcdc: lcdc@50008000 {
+			compatible = "sifli,sf32lb-lcdc";
+			reg = <0x50008000 0x1000>;
+			clocks = <&rcc_clk SF32LB52X_CLOCK_LCDC1>;
+			status = "disabled";
+
+			mipi-dbi {
+				compatible = "sifli,sf32lb-lcdc-mipi-dbi";
+				status = "disabled";
+			};
+		};
+
 		trng: trng@5000f000 {
 			compatible = "sifli,sf32lb-trng";
 			reg = <0x5000f000 0x1000>;
@@ -158,6 +170,14 @@
 			compatible = "sifli,sf32lb-crc";
 			reg = <0x50048000 0x1000>;
 			clocks = <&rcc_clk SF32LB52X_CLOCK_CRC1>;
+			status = "disabled";
+		};
+
+		crypto: crypto@5000d000 {
+			compatible = "sifli,sf32lb-crypto";
+			reg = <0x5000d000 0x1000>;
+			clocks = <&rcc_clk SF32LB52X_CLOCK_AES>;
+			interrupts = <67 0>;
 			status = "disabled";
 		};
 
@@ -203,6 +223,13 @@
 			status = "disabled";
 		};
 
+		audcodec: audio-codec@50088000 {
+			compatible = "sifli,sf32lb-audcodec";
+			reg = <0x50088000 0x400>;
+			clocks = <&rcc_clk SF32LB52X_CLOCK_AUDCODEC>;
+			status = "disabled";
+		};
+
 		tsen: tsen@50089000 {
 			compatible = "sifli,sf32lb-tsen";
 			reg = <0x50089000 0x1000>;
@@ -215,6 +242,8 @@
 			compatible = "sifli,sf32lb-wdt";
 			reg = <0x50094000 0x1000>;
 			interrupts = <26 0>;
+			sifli,pmuc = <&pmuc>;
+			sifli,cfg = <&cfg>;
 			status = "disabled";
 		};
 
@@ -311,6 +340,15 @@
 				sifli,pinmuxs = <&pinctrl SF32LB_PORT_PA 0x80>;
 				status = "disabled";
 			};
+		};
+
+		efuse: otp@5000c000 {
+			compatible = "sifli,sf32lb-efuse";
+			reg = <0x5000c000 0x100>;
+			sifli,pmuc = <&pmuc>;
+			sifli,bank-size = <32>;
+			sifli,bank-offsets = <0x30 0x50 0x70 0x90>;
+			status = "disabled";
 		};
 
 		cfg: syscon@5000b000 {

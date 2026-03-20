@@ -20,6 +20,11 @@
 		zephyr,sram = &sram0;
 		zephyr,console = &uart0;
 		zephyr,shell-uart = &uart0;
+		zephyr,entropy = &sec_eng_trng;
+	};
+
+	aliases {
+		watchdog0 = &wdt0;
 	};
 };
 
@@ -28,9 +33,9 @@
 };
 
 &flashctrl {
-	flash0: flash@A0000000 {
+	flash0: flash@a0000000 {
 		compatible = "soc-nv-flash", "gd,25lq32d";
-		reg = <0xA0000000 (0x400000 - 0x2000)>;
+		reg = <0xa0000000 (0x400000 - 0x2000)>;
 		write-block-size = <256>;
 		erase-block-size = <DT_SIZE_K(4)>;
 

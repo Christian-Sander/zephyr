@@ -7,7 +7,8 @@
 
 #define DT_DRV_COMPAT espressif_esp32_watchdog
 
-#if defined(CONFIG_SOC_SERIES_ESP32C6) || defined(CONFIG_SOC_SERIES_ESP32H2)
+#if defined(CONFIG_SOC_SERIES_ESP32C5) || defined(CONFIG_SOC_SERIES_ESP32C6) ||                    \
+	defined(CONFIG_SOC_SERIES_ESP32H2)
 #include <soc/lp_aon_reg.h>
 #else
 #include <soc/rtc_cntl_reg.h>
@@ -168,10 +169,6 @@ static int wdt_esp32_init(const struct device *dev)
 		LOG_ERR("could not allocate interrupt (err %d)", ret);
 		return ret;
 	}
-
-#ifndef CONFIG_WDT_DISABLE_AT_BOOT
-	wdt_esp32_enable(dev);
-#endif
 
 	return 0;
 }

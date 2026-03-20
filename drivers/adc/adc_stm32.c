@@ -19,6 +19,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/init.h>
 #include <zephyr/toolchain.h>
+#include <zephyr/sys/byteorder.h>
 #include <soc.h>
 #include <stm32_bitops.h>
 #include <stm32_cache.h>
@@ -47,7 +48,6 @@
 LOG_MODULE_REGISTER(adc_stm32);
 
 #include <zephyr/drivers/clock_control/stm32_clock_control.h>
-#include <zephyr/dt-bindings/adc/stm32_adc.h>
 #include <zephyr/irq.h>
 #include <zephyr/mem_mgmt/mem_attr.h>
 
@@ -160,11 +160,11 @@ LOG_MODULE_REGISTER(adc_stm32);
 #define MAX_RANK	16
 #endif
 
-#define RANK(i, _)	_CONCAT_1(LL_ADC_REG_RANK_, UTIL_INC(i))
+#define RANK(i, _)	CONCAT(LL_ADC_REG_RANK_, UTIL_INC(i))
 static const uint32_t table_rank[] = {
 	LISTIFY(MAX_RANK, RANK, (,))};
 
-#define SEQ_LEN(i, _)	_CONCAT_2(LL_ADC_REG_SEQ_SCAN_ENABLE_, UTIL_INC(UTIL_INC(i)), RANKS)
+#define SEQ_LEN(i, _)	CONCAT(LL_ADC_REG_SEQ_SCAN_ENABLE_, UTIL_INC(UTIL_INC(i)), RANKS)
 /* Length of this array signifies the maximum sequence length */
 static const uint32_t table_seq_len[] = {
 	LL_ADC_REG_SEQ_SCAN_DISABLE,
@@ -210,7 +210,19 @@ struct adc_stm32_data {
 	volatile int dma_error;
 	struct stream dma;
 #endif
+#ifdef CONFIG_ADC_STREAM
+	struct rtio_iodev_sqe *sqe;
+#endif /* CONFIG_ADC_STREAM */
 };
+
+#ifdef CONFIG_ADC_STREAM
+struct adc_stm32_rtio_data {
+	uint64_t timestamp;
+	uint16_t vref_mv;
+	uint16_t res: 5;
+	uint16_t channel_count: 6;
+} __packed;
+#endif /* CONFIG_ADC_STREAM */
 
 struct adc_stm32_cfg {
 	ADC_TypeDef *base;
@@ -220,7 +232,10 @@ struct adc_stm32_cfg {
 	const struct stm32_pclken pclken_pre;
 	uint32_t clk_prescaler;
 	const struct pinctrl_dev_config *pcfg;
+	const uint8_t *table_raw_resolution;
+	const uint32_t *table_ll_resolution;
 	const uint16_t sampling_time_table[STM32_NB_SAMPLING_TIME];
+	int8_t table_resolution_size;
 	int8_t num_sampling_time_common_channels;
 	int8_t sequencer_type;
 	int8_t oversampler_type;
@@ -231,8 +246,6 @@ struct adc_stm32_cfg {
 	bool has_channel_preselection	:1;
 	bool has_differential_support	:1;
 	bool differential_channels_used	:1;
-	int8_t res_table_size;
-	const uint32_t res_table[];
 };
 
 #ifdef CONFIG_ADC_STM32_DMA
@@ -240,7 +253,12 @@ static void adc_stm32_enable_dma_support(ADC_TypeDef *adc)
 {
 	/* Allow ADC to create DMA request and set to one-shot mode as implemented in HAL drivers */
 #if DT_HAS_COMPAT_STATUS_OKAY(st_stm32f1_adc)
-	LL_ADC_REG_SetDMATransfer(adc, LL_ADC_REG_DMA_TRANSFER_UNLIMITED);
+	/* Only modify CR2 register if DMA bit is not already set, otherwise
+	 * when ADON=1 a conversion is triggered
+	 */
+	if (LL_ADC_REG_GetDMATransfer(adc) != LL_ADC_REG_DMA_TRANSFER_UNLIMITED) {
+		LL_ADC_REG_SetDMATransfer(adc, LL_ADC_REG_DMA_TRANSFER_UNLIMITED);
+	}
 #elif defined(CONFIG_SOC_SERIES_STM32H7X) || \
 	defined(CONFIG_SOC_SERIES_STM32N6X) || \
 	defined(CONFIG_SOC_SERIES_STM32U3X) || \
@@ -692,7 +710,7 @@ static int adc_stm32_calibrate(const struct device *dev)
 #define MAX_OVS_SHIFT	8
 #endif
 
-#define OVS_SHIFT(i, _)	_CONCAT_1(LL_ADC_OVS_SHIFT_RIGHT_, UTIL_INC(i))
+#define OVS_SHIFT(i, _)	CONCAT(LL_ADC_OVS_SHIFT_RIGHT_, UTIL_INC(i))
 static const uint32_t table_oversampling_shift[] = {
 	LL_ADC_OVS_SHIFT_NONE,
 	LISTIFY(MAX_OVS_SHIFT, OVS_SHIFT, (,))
@@ -852,80 +870,35 @@ static void dma_callback(const struct device *dev, void *user_data,
 }
 #endif /* CONFIG_ADC_STM32_DMA */
 
-static uint8_t get_reg_value(const struct device *dev, uint32_t reg,
-			     uint32_t shift, uint32_t mask)
-{
-	const struct adc_stm32_cfg *config = dev->config;
-	ADC_TypeDef *adc = config->base;
-
-	uintptr_t addr = (uintptr_t)adc + reg;
-
-	return ((*(volatile uint32_t *)addr >> shift) & mask);
-}
-
-static void set_reg_value(const struct device *dev, uint32_t reg,
-			  uint32_t shift, uint32_t mask, uint32_t value)
-{
-	const struct adc_stm32_cfg *config = dev->config;
-	size_t reg32_offset = reg / sizeof(uint32_t);
-	volatile uint32_t *addr = (volatile uint32_t *)config->base + reg32_offset;
-
-	stm32_reg_modify_bits(addr, mask << shift, value << shift);
-}
-
 static int set_resolution(const struct device *dev,
 			  const struct adc_sequence *sequence)
 {
 	const struct adc_stm32_cfg *config = dev->config;
-	ADC_TypeDef *adc = config->base;
-	uint8_t res_reg_addr = 0xFF;
-	uint8_t res_shift = 0;
-	uint8_t res_mask = 0;
-	uint8_t res_reg_val = 0;
+	__maybe_unused ADC_TypeDef *adc = config->base;
 	int i;
 
-	for (i = 0; i < config->res_table_size; i++) {
-		if (sequence->resolution == STM32_ADC_GET_REAL_VAL(config->res_table[i])) {
-			res_reg_addr = STM32_ADC_GET_REG(config->res_table[i]);
-			res_shift = STM32_ADC_GET_SHIFT(config->res_table[i]);
-			res_mask = STM32_ADC_GET_MASK(config->res_table[i]);
-			res_reg_val = STM32_ADC_GET_REG_VAL(config->res_table[i]);
+	for (i = 0; i < config->table_resolution_size; i++) {
+		if (sequence->resolution == config->table_raw_resolution[i]) {
 			break;
 		}
 	}
 
-	if (i == config->res_table_size) {
+	if (i == config->table_resolution_size) {
 		LOG_ERR("Invalid resolution");
 		return -EINVAL;
 	}
 
-	/*
-	 * Some MCUs (like STM32F1x) have no register to configure resolution.
-	 * These MCUs have a register address value of 0xFF and should be
-	 * ignored.
-	 */
-	if (res_reg_addr != 0xFF) {
-		/*
-		 * We don't use LL_ADC_SetResolution and LL_ADC_GetResolution
-		 * because they don't strictly use hardware resolution values
-		 * and makes internal conversions for some series.
-		 * (see stm32h7xx_ll_adc.h)
-		 * Instead we set the register ourselves if needed.
-		 */
-		if (get_reg_value(dev, res_reg_addr, res_shift, res_mask) != res_reg_val) {
-			/*
-			 * Writing ADC_CFGR1 register while ADEN bit is set
-			 * resets RES[1:0] bitfield. We need to disable and enable adc.
-			 */
-			adc_stm32_disable(adc);
-			set_reg_value(dev, res_reg_addr, res_shift, res_mask, res_reg_val);
-		}
+#if !DT_HAS_COMPAT_STATUS_OKAY(st_stm32f1_adc)
+	if (LL_ADC_GetResolution(adc) != config->table_ll_resolution[i]) {
+		adc_stm32_disable(adc);
+		LL_ADC_SetResolution(adc, config->table_ll_resolution[i]);
 	}
+#endif /* !DT_HAS_COMPAT_STATUS_OKAY(st_stm32f1_adc) */
 
 	return 0;
 }
 
-static int set_sequencer(const struct device *dev)
+static void set_sequencer(const struct device *dev)
 {
 	const struct adc_stm32_cfg *config = dev->config;
 	struct adc_stm32_data *data = dev->data;
@@ -985,8 +958,6 @@ static int set_sequencer(const struct device *dev)
 	DT_HAS_COMPAT_STATUS_OKAY(st_stm32f4_adc)
 	LL_ADC_SetSequencersScanMode(adc, LL_ADC_SEQ_SCAN_ENABLE);
 #endif /* st_stm32f1_adc || st_stm32f4_adc */
-
-	return 0;
 }
 
 static int start_read(const struct device *dev,
@@ -1001,6 +972,7 @@ static int start_read(const struct device *dev,
 	data->channels = sequence->channels;
 	data->channel_count = POPCOUNT(data->channels);
 	data->samples_count = 0;
+	data->resolution = sequence->resolution;
 
 	if (data->channel_count == 0) {
 		LOG_ERR("No channels selected");
@@ -1029,10 +1001,7 @@ static int start_read(const struct device *dev,
 	}
 
 	/* Configure the sequencer */
-	err = set_sequencer(dev);
-	if (err < 0) {
-		return err;
-	}
+	set_sequencer(dev);
 
 	err = check_buffer(sequence, data->channel_count);
 	if (err) {
@@ -1083,8 +1052,14 @@ static int start_read(const struct device *dev,
 #endif
 #endif /* CONFIG_ADC_STM32_DMA */
 
+	LL_ADC_REG_SetContinuousMode(adc, LL_ADC_REG_CONV_SINGLE);
+#ifdef CONFIG_ADC_STREAM
+	data->ctx.asynchronous = true;
+	adc_context_start_sampling(&data->ctx);
+#else /* CONFIG_ADC_STREAM */
 	/* This call will start the DMA */
 	adc_context_start_read(&data->ctx, sequence);
+#endif /* CONFIG_ADC_STREAM */
 
 	int result = adc_context_wait_for_completion(&data->ctx);
 
@@ -1131,8 +1106,7 @@ static void adc_context_update_buffer_pointer(struct adc_context *ctx,
 static void adc_stm32_isr(const struct device *dev)
 {
 	struct adc_stm32_data *data = dev->data;
-	const struct adc_stm32_cfg *config =
-		(const struct adc_stm32_cfg *)dev->config;
+	const struct adc_stm32_cfg *config = (const struct adc_stm32_cfg *)dev->config;
 	ADC_TypeDef *adc = config->base;
 
 #if !DT_HAS_COMPAT_STATUS_OKAY(st_stm32f1_adc)
@@ -1150,6 +1124,8 @@ static void adc_stm32_isr(const struct device *dev)
 #else
 	if (LL_ADC_IsActiveFlag_EOC(adc) == 1) {
 #endif
+
+#ifndef CONFIG_ADC_STREAM
 		*data->buffer++ = LL_ADC_REG_ReadConversionData32(adc);
 		/* ISR is triggered after each conversion, and at the end-of-sequence. */
 		if (++data->samples_count == data->channel_count) {
@@ -1162,6 +1138,38 @@ static void adc_stm32_isr(const struct device *dev)
 							 PM_ALL_SUBSTATES);
 			}
 		}
+#else /* CONFIG_ADC_STREAM */
+		if (data->samples_count == 0U) {
+			uint8_t *buf;
+			uint32_t buf_len;
+			const size_t read_size = sizeof(struct adc_stm32_rtio_data) +
+						 data->channel_count * sizeof(adc_data_size_t);
+			struct adc_stm32_rtio_data *hdr;
+
+			if (rtio_sqe_rx_buf(data->sqe, read_size, read_size, &buf, &buf_len) != 0) {
+				rtio_iodev_sqe_err(data->sqe, -ENOMEM);
+				return;
+			}
+
+			hdr = (struct adc_stm32_rtio_data *)buf;
+			hdr->timestamp = k_ticks_to_ns_floor64(k_uptime_ticks());
+			hdr->vref_mv = STM32_ADC_VREF_MV;
+			hdr->res = data->resolution;
+			hdr->channel_count = data->channel_count;
+		}
+
+		adc_data_size_t *read_buf = (adc_data_size_t *)(data->sqe->sqe.rx.buf +
+					    sizeof(struct adc_stm32_rtio_data) +
+					    data->samples_count * sizeof(adc_data_size_t));
+
+		*read_buf = LL_ADC_REG_ReadConversionData32(adc);
+
+		if (++data->samples_count == data->channel_count) {
+			data->samples_count = 0;
+			adc_context_on_sampling_done(&data->ctx, dev);
+			rtio_iodev_sqe_ok(data->sqe, 0);
+		}
+#endif /* CONFIG_ADC_STREAM */
 	}
 
 	LOG_DBG("%s ISR triggered.", dev->name);
@@ -1607,16 +1615,10 @@ static int adc_stm32_init(const struct device *dev)
 {
 	struct adc_stm32_data *data = dev->data;
 	const struct adc_stm32_cfg *config = dev->config;
-	const struct device *const clk = DEVICE_DT_GET(STM32_CLOCK_CONTROL_NODE);
 	__maybe_unused ADC_TypeDef *adc = config->base;
 	int err;
 
 	LOG_DBG("Initializing %s", dev->name);
-
-	if (!device_is_ready(clk)) {
-		LOG_ERR("clock control device not ready");
-		return -ENODEV;
-	}
 
 	data->dev = dev;
 
@@ -1775,6 +1777,95 @@ static int adc_stm32_pm_action(const struct device *dev,
 }
 #endif /* CONFIG_PM_DEVICE */
 
+#ifdef CONFIG_ADC_STREAM
+static void adc_stm32_submit_stream(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
+{
+	struct adc_stm32_data *data = dev->data;
+	const struct adc_read_config *read_cfg = iodev_sqe->sqe.iodev->data;
+	int rc;
+
+	data->sqe = iodev_sqe;
+
+	adc_context_lock(&data->ctx, false, NULL);
+	rc = start_read(dev, read_cfg->sequence);
+	adc_context_release(&data->ctx, rc);
+
+	if (rc < 0) {
+		LOG_ERR("Error starting conversion (%d)", rc);
+	}
+}
+
+static int adc_stm32_decoder_get_frame_count(const uint8_t *buffer, uint32_t channel,
+					     uint16_t *frame_count)
+{
+	ARG_UNUSED(buffer);
+	ARG_UNUSED(channel);
+
+	*frame_count = 1U;
+
+	return 0;
+}
+
+static int adc_stm32_convert_q31(q31_t *out, const uint8_t *buff,
+				 uint16_t resolution, uint16_t vref_mv, uint8_t adc_shift)
+{
+	int32_t data_in = 0;
+	uint32_t scale = BIT(resolution);
+
+	uint32_t sensitivity = (vref_mv * (scale - 1)) / scale * 1000 / scale; /* uV / LSB */
+
+	data_in = sys_get_le16(buff);
+
+	*out =  BIT(31 - adc_shift) * sensitivity / 1000000 * data_in;
+	return 0;
+}
+
+static int adc_stm32_decoder_decode(const uint8_t *buffer, uint32_t channel, uint32_t *fit,
+				    uint16_t max_count, void *data_out)
+{
+	const struct adc_stm32_rtio_data *enc_data = (const struct adc_stm32_rtio_data *)buffer;
+
+	if (*fit != 0U) {
+		return 0;
+	}
+
+	if (channel >= enc_data->channel_count) {
+		return -EINVAL;
+	}
+
+	struct adc_data *data = (struct adc_data *)data_out;
+
+	memset(data, 0, sizeof(struct adc_data));
+	data->header.base_timestamp_ns = enc_data->timestamp;
+	data->header.reading_count = 1;
+
+	data->shift = find_msb_set(enc_data->vref_mv) - 1;
+
+	buffer += sizeof(struct adc_stm32_rtio_data) + channel * sizeof(adc_data_size_t);
+
+	adc_stm32_convert_q31(&data->readings[0].value, buffer,
+			      enc_data->res, enc_data->vref_mv, data->shift);
+
+	*fit = 1U;
+
+	return 0;
+
+}
+
+ADC_DECODER_API_DT_DEFINE() = {
+	.get_frame_count = adc_stm32_decoder_get_frame_count,
+	.decode = adc_stm32_decoder_decode,
+};
+
+static int adc_stm32_get_decoder(const struct device *dev, const struct adc_decoder_api **api)
+{
+	ARG_UNUSED(dev);
+	*api = &ADC_DECODER_NAME();
+
+	return 0;
+}
+#endif
+
 static DEVICE_API(adc, api_stm32_driver_api) = {
 	.channel_setup = adc_stm32_channel_setup,
 	.read = adc_stm32_read,
@@ -1782,6 +1873,10 @@ static DEVICE_API(adc, api_stm32_driver_api) = {
 	.read_async = adc_stm32_read_async,
 #endif
 	.ref_internal = STM32_ADC_VREF_MV, /* VREF is usually connected to VDD */
+#ifdef CONFIG_ADC_STREAM
+	.submit = adc_stm32_submit_stream,
+	.get_decoder = adc_stm32_get_decoder,
+#endif /* CONFIG_ADC_STREAM */
 };
 
 /* Macros for ADC clock source and prescaler */
@@ -1804,7 +1899,7 @@ static DEVICE_API(adc, api_stm32_driver_api) = {
 
 /* Concat prefix (1st element) and DIV value (2nd element) of st,adc-prescaler */
 #define ADC_STM32_DT_PRESC(x)	\
-	_CONCAT(ADC_STM32_CLOCK_PREFIX(x), ADC_STM32_DIV(x))
+	CONCAT(ADC_STM32_CLOCK_PREFIX(x), ADC_STM32_DIV(x))
 
 /* Macro to check if the ADC instance clock setup is correct */
 #define ADC_STM32_CHECK_DT_CLOCK(x)								\
@@ -1962,11 +2057,22 @@ DT_INST_FOREACH_STATUS_OKAY(GENERATE_ISR)
 			(ADC_DMA_CHANNEL_INIT(id, src, dest)),				\
 			(/* Required for other adc instances without dma */))
 
+#define LIST_RESOLUTION(i, index)								\
+	CONCAT(LL_ADC_RESOLUTION_, DT_INST_PROP_BY_IDX(index, st_adc_resolutions, i), B)
+
 #define ADC_STM32_INIT(index)									\
 												\
 	ADC_STM32_CHECK_DT_CLOCK(index);							\
 												\
 	PINCTRL_DT_INST_DEFINE(index);								\
+												\
+	static const uint8_t table_raw_resolution##index[] =					\
+		DT_INST_PROP(index, st_adc_resolutions);					\
+												\
+	static const uint32_t table_ll_resolution##index[] = {					\
+		LISTIFY(DT_INST_PROP_LEN(index, st_adc_resolutions),				\
+			LIST_RESOLUTION, (,), index),						\
+	};											\
 												\
 	static const struct adc_stm32_cfg adc_stm32_cfg_##index = {				\
 		.base = (ADC_TypeDef *)DT_INST_REG_ADDR(index),					\
@@ -1995,8 +2101,9 @@ DT_INST_FOREACH_STATUS_OKAY(GENERATE_ISR)
 		.sampling_time_table = DT_INST_PROP(index, sampling_times),			\
 		.num_sampling_time_common_channels =						\
 			DT_INST_PROP_OR(index, num_sampling_time_common_channels, 0),		\
-		.res_table_size = DT_INST_PROP_LEN(index, resolutions),				\
-		.res_table = DT_INST_PROP(index, resolutions),					\
+		.table_resolution_size = DT_INST_PROP_LEN(index, st_adc_resolutions),		\
+		.table_raw_resolution = table_raw_resolution##index,				\
+		.table_ll_resolution = table_ll_resolution##index,				\
 	};											\
 												\
 	static struct adc_stm32_data adc_stm32_data_##index = {					\

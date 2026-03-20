@@ -5,7 +5,7 @@
 #
 
 identifier: frdm_mcxa577
-name: NXP FRDM MCXA577
+name: NXP FRDM-MCXA577
 type: mcu
 arch: arm
 ram: 640
@@ -16,4 +16,12 @@ toolchain:
 supported:
   - gpio
   - uart
+  - counter
+  - adc
+  - i2c
+  - spi
+  - dma
+  - watchdog
+  - flash
+  - netif:eth
 vendor: nxp

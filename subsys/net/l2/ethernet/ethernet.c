@@ -10,6 +10,7 @@ LOG_MODULE_REGISTER(net_ethernet, CONFIG_NET_L2_ETHERNET_LOG_LEVEL);
 
 #include <zephyr/net/net_core.h>
 #include <zephyr/net/net_l2.h>
+#include <zephyr/net/net_log.h>
 #include <zephyr/net/net_if.h>
 #include <zephyr/net/net_mgmt.h>
 #include <zephyr/net/ethernet.h>
@@ -347,7 +348,7 @@ static enum net_verdict ethernet_recv(struct net_if *iface,
 
 	net_pkt_set_ll_proto_type(pkt, type);
 	dst_broadcast = net_eth_is_addr_broadcast((struct net_eth_addr *)lladdr->addr);
-	dst_eth_multicast = net_eth_is_addr_group((struct net_eth_addr *)lladdr->addr);
+	dst_eth_multicast = net_eth_is_addr_multicast((struct net_eth_addr *)lladdr->addr);
 	dst_iface_addr = net_linkaddr_cmp(net_if_get_link_addr(iface), lladdr);
 
 	if (is_vlan_pkt) {
@@ -810,9 +811,8 @@ arp_error:
 
 static inline int ethernet_enable(struct net_if *iface, bool state)
 {
-	int ret = 0;
-	const struct ethernet_api *eth =
-		net_if_get_device(iface)->api;
+	const struct device *dev = net_if_get_device(iface);
+	const struct ethernet_api *eth = dev->api;
 
 	if (!eth) {
 		return -ENOENT;
@@ -822,15 +822,15 @@ static inline int ethernet_enable(struct net_if *iface, bool state)
 		net_arp_clear_cache(iface);
 
 		if (eth->stop) {
-			ret = eth->stop(net_if_get_device(iface));
+			return eth->stop(dev);
 		}
 	} else {
 		if (eth->start) {
-			ret = eth->start(net_if_get_device(iface));
+			return eth->start(dev);
 		}
 	}
 
-	return ret;
+	return 0;
 }
 
 enum net_l2_flags ethernet_flags(struct net_if *iface)
@@ -928,7 +928,7 @@ const struct device *net_eth_get_phy(struct net_if *iface)
 		return NULL;
 	}
 
-	return api->get_phy(net_if_get_device(iface));
+	return api->get_phy(dev);
 }
 
 #if defined(CONFIG_PTP_CLOCK)
@@ -953,7 +953,7 @@ const struct device *net_eth_get_ptp_clock(struct net_if *iface)
 		return NULL;
 	}
 
-	return api->get_ptp_clock(net_if_get_device(iface));
+	return api->get_ptp_clock(dev);
 }
 #endif /* CONFIG_PTP_CLOCK */
 
@@ -1020,6 +1020,7 @@ int net_eth_promisc_mode(struct net_if *iface, bool enable)
 
 int net_eth_txinjection_mode(struct net_if *iface, bool enable)
 {
+#ifdef CONFIG_NET_L2_ETHERNET_MGMT
 	struct ethernet_req_params params;
 
 	if (!(net_eth_get_hw_capabilities(iface) & ETHERNET_TXINJECTION_MODE)) {
@@ -1030,6 +1031,12 @@ int net_eth_txinjection_mode(struct net_if *iface, bool enable)
 
 	return net_mgmt(NET_REQUEST_ETHERNET_SET_TXINJECTION_MODE, iface,
 			&params, sizeof(struct ethernet_req_params));
+#else
+	ARG_UNUSED(iface);
+	ARG_UNUSED(enable);
+
+	return -ENOTSUP;
+#endif
 }
 
 int net_eth_mac_filter(struct net_if *iface, struct net_eth_addr *mac,
@@ -1069,6 +1076,11 @@ void ethernet_init(struct net_if *iface)
 	/* DSA port may need to handle flags */
 	dsa_eth_init(iface);
 #endif
+
+	if (IS_ENABLED(CONFIG_ETH_NET_IF_NO_AUTO_START)) {
+		/* Do not start Ethernet interface automatically */
+		net_if_flag_set(iface, NET_IF_NO_AUTO_START);
+	}
 
 	ctx->ethernet_l2_flags = NET_L2_MULTICAST;
 	ctx->iface = iface;

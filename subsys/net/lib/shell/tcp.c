@@ -258,8 +258,6 @@ static void tcp_recv_cb(struct net_context *context, struct net_pkt *pkt,
 static int cmd_net_tcp_connect(const struct shell *sh, size_t argc, char *argv[])
 {
 #if defined(CONFIG_NET_TCP) && defined(CONFIG_NET_NATIVE_TCP)
-	int arg = 0;
-
 	/* tcp connect <ip> port */
 	char *endptr;
 	char *ip;
@@ -271,21 +269,21 @@ static int cmd_net_tcp_connect(const struct shell *sh, size_t argc, char *argv[]
 		return -ENOEXEC;
 	}
 
-	if (!argv[++arg]) {
+	if (argv[1] == NULL) {
 		PR_WARNING("Peer IP address missing.\n");
 		return -ENOEXEC;
 	}
 
-	ip = argv[arg];
+	ip = argv[1];
 
-	if (!argv[++arg]) {
+	if (argv[2] == NULL) {
 		PR_WARNING("Peer port missing.\n");
 		return -ENOEXEC;
 	}
 
-	port = strtol(argv[arg], &endptr, 10);
+	port = strtol(argv[2], &endptr, 10);
 	if (*endptr != '\0') {
-		PR_WARNING("Invalid port %s\n", argv[arg]);
+		PR_WARNING("Invalid port %s\n", argv[2]);
 		return -ENOEXEC;
 	}
 
@@ -301,7 +299,6 @@ static int cmd_net_tcp_connect(const struct shell *sh, size_t argc, char *argv[]
 static int cmd_net_tcp_send(const struct shell *sh, size_t argc, char *argv[])
 {
 #if defined(CONFIG_NET_TCP) && defined(CONFIG_NET_NATIVE_TCP)
-	int arg = 0;
 	int ret;
 	struct net_shell_user_data user_data;
 
@@ -311,15 +308,15 @@ static int cmd_net_tcp_send(const struct shell *sh, size_t argc, char *argv[])
 		return -ENOEXEC;
 	}
 
-	if (!argv[++arg]) {
+	if (argv[1] == NULL) {
 		PR_WARNING("No data to send.\n");
 		return -ENOEXEC;
 	}
 
 	user_data.sh = sh;
 
-	ret = net_context_send(tcp_ctx, (uint8_t *)argv[arg],
-			       strlen(argv[arg]), tcp_sent_cb,
+	ret = net_context_send(tcp_ctx, (uint8_t *)argv[1],
+			       strlen(argv[1]), tcp_sent_cb,
 			       TCP_TIMEOUT, &user_data);
 	if (ret < 0) {
 		PR_WARNING("Cannot send msg (%d)\n", ret);
@@ -399,16 +396,17 @@ static int cmd_net_tcp(const struct shell *sh, size_t argc, char *argv[])
 
 SHELL_STATIC_SUBCMD_SET_CREATE(net_cmd_tcp,
 	SHELL_CMD(connect, NULL,
-		  "'net tcp connect <address> <port>' connects to TCP peer.",
+		  SHELL_HELP("Connects to TCP peer", "<address> <port>"),
 		  cmd_net_tcp_connect),
 	SHELL_CMD(send, NULL,
-		  "'net tcp send <data>' sends data to peer using TCP.",
+		  SHELL_HELP("Sends data to peer using TCP", "<data>"),
 		  cmd_net_tcp_send),
 	SHELL_CMD(recv, NULL,
-		  "'net tcp recv' receives data using TCP.",
+		  SHELL_HELP("Receives data using TCP", ""),
 		  cmd_net_tcp_recv),
 	SHELL_CMD(close, NULL,
-		  "'net tcp close' closes TCP connection.", cmd_net_tcp_close),
+		  SHELL_HELP("Closes TCP connection", ""),
+		  cmd_net_tcp_close),
 	SHELL_SUBCMD_SET_END
 );
 

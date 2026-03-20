@@ -97,9 +97,7 @@ static void lan865x_iface_init(struct net_if *iface)
 
 	net_if_set_link_addr(iface, ctx->mac_address, sizeof(ctx->mac_address), NET_LINK_ETHERNET);
 
-	if (ctx->iface == NULL) {
-		ctx->iface = iface;
-	}
+	ctx->iface = iface;
 
 	ethernet_init(iface);
 
@@ -231,6 +229,9 @@ static void lan865x_write_macaddress(const struct device *dev)
 	 */
 	val = (mac[5] << 24) | (mac[4] << 16) | (mac[3] << 8) | mac[2];
 	oa_tc6_reg_write(ctx->tc6, LAN865x_MAC_SAB1, val);
+	/* SPEC_ADD1_TOP - write top register too for activation */
+	val = mac[1] << 8 | mac[0];
+	oa_tc6_reg_write(ctx->tc6, LAN865x_MAC_SAT1, val);
 }
 
 static int lan865x_set_specific_multicast_addr(const struct device *dev)
@@ -478,8 +479,7 @@ static const struct ethernet_api lan865x_api_func = {
 		.spi = SPI_DT_SPEC_INST_GET(inst, SPI_WORD_SET(8)),                                \
 		.interrupt = GPIO_DT_SPEC_INST_GET(inst, int_gpios),                               \
 		.reset = GPIO_DT_SPEC_INST_GET(inst, rst_gpios),                                   \
-		.phy = DEVICE_DT_GET(                                                              \
-			DT_CHILD(DT_INST_CHILD(inst, lan865x_mdio), ethernet_phy_##inst)),         \
+		.phy = DEVICE_DT_GET(DT_INST_PHANDLE(inst, phy_handle)),                           \
 		.mac_cfg = NET_ETH_MAC_DT_INST_CONFIG_INIT(inst),                                  \
 	};                                                                                         \
                                                                                                    \

@@ -19,6 +19,7 @@ from west.commands import WestCommand
 
 sys.path.append(os.fspath(Path(__file__).parent.parent))
 import zephyr_module
+
 from zephyr_ext_common import ZEPHYR_BASE
 
 try:
@@ -39,15 +40,14 @@ class Patch(WestCommand):
     def __init__(self):
         super().__init__(
             "patch",
-            "apply patches to the west workspace",
-            "Apply patches to the west workspace",
+            "",
+            description="Apply patches to the west workspace",
             accepts_unknown_args=False,
         )
 
     def do_add_parser(self, parser_adder):
         parser = parser_adder.add_parser(
             self.name,
-            help=self.help,
             formatter_class=argparse.RawDescriptionHelpFormatter,
             description=self.description,
             epilog=textwrap.dedent("""\

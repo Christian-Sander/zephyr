@@ -10,22 +10,11 @@ config SD_CMD_TIMEOUT
 
 endif # DISK_DRIVER_SDMMC
 
-if DISPLAY
-
-config MEMC
+configdefault NET_L2_ETHERNET
 	default y
 
-config RENESAS_RA_GLCDC_FRAME_BUFFER_SECTION
-	default ".sdram"
-	depends on RENESAS_RA_GLCDC
-
-if LVGL
-
-config LV_Z_VDB_CUSTOM_SECTION
-	default y
-
-endif # LVGL
-
-endif # DISPLAY
+# Enable fixed clock for ethernet phy
+config CLOCK_CONTROL_FIXED_RATE_CLOCK
+	default y if ETH_PHY_DRIVER
 
 endif # BOARD_EK_RA8P1

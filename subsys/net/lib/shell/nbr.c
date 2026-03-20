@@ -16,7 +16,7 @@ static int cmd_net_nbr_rm(const struct shell *sh, size_t argc, char *argv[])
 	struct net_in6_addr addr;
 	int ret;
 
-	if (!argv[1]) {
+	if (argv[1] == NULL) {
 		PR_WARNING("Neighbor IPv6 address missing.\n");
 		return -ENOEXEC;
 	}
@@ -195,7 +195,7 @@ static void nbr_address_get(size_t idx, struct shell_static_entry *entry)
 
 SHELL_STATIC_SUBCMD_SET_CREATE(net_cmd_nbr,
 	SHELL_CMD(rm, NBR_ADDRESS_CMD,
-		  "'net nbr rm <address>' removes neighbor from cache.",
+		  SHELL_HELP("Removes neighbor from cache", "<address>"),
 		  cmd_net_nbr_rm),
 	SHELL_SUBCMD_SET_END
 );

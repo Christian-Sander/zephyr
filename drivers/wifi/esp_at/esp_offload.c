@@ -151,13 +151,11 @@ void esp_connect_work(struct k_work *work)
 }
 
 static int esp_bind(struct net_context *context, const struct net_sockaddr *addr,
-		    socklen_t addrlen)
+		    net_socklen_t addrlen)
 {
 	struct esp_socket *sock;
-	struct esp_data *dev;
 
 	sock = (struct esp_socket *)context->offload_context;
-	dev = esp_socket_to_dev(sock);
 
 	if (esp_socket_ip_proto(sock) == NET_IPPROTO_TCP) {
 		return 0;
@@ -182,7 +180,7 @@ static int esp_bind(struct net_context *context, const struct net_sockaddr *addr
 
 static int esp_connect(struct net_context *context,
 		       const struct net_sockaddr *addr,
-		       socklen_t addrlen,
+		       net_socklen_t addrlen,
 		       net_context_connect_cb_t cb,
 		       int32_t timeout,
 		       void *user_data)
@@ -422,7 +420,7 @@ void esp_send_work(struct k_work *work)
 
 static int esp_sendto(struct net_pkt *pkt,
 		      const struct net_sockaddr *dst_addr,
-		      socklen_t addrlen,
+		      net_socklen_t addrlen,
 		      net_context_send_cb_t cb,
 		      int32_t timeout,
 		      void *user_data)
@@ -566,7 +564,7 @@ MODEM_CMD_DIRECT_DEFINE(on_cmd_ciprecvdata)
 	}
 
 #if defined(CONFIG_WIFI_ESP_AT_CIPDINFO_USE) && !defined(CONFIG_WIFI_ESP_AT_VERSION_1_7)
-	char raw_remote_ip[INET_ADDRSTRLEN + 3] = {0};
+	char raw_remote_ip[NET_INET_ADDRSTRLEN + 3] = {0};
 	int port = 0;
 
 	err = cmd_ciprecvdata_parse(sock, data->rx_buf, len, &data_offset,
@@ -594,7 +592,7 @@ MODEM_CMD_DIRECT_DEFINE(on_cmd_ciprecvdata)
 	 * conv function. So we remove them by subtraction 2 from
 	 * raw_remote_ip length and index from &raw_remote_ip[1].
 	 */
-	char remote_ip_addr[INET_ADDRSTRLEN];
+	char remote_ip_addr[NET_INET_ADDRSTRLEN];
 	size_t remote_ip_str_len;
 
 	remote_ip_str_len = MIN(sizeof(remote_ip_addr) - 1,
@@ -792,7 +790,7 @@ static struct net_offload esp_offload = {
 
 int esp_offload_init(struct net_if *iface)
 {
-	iface->if_dev->offload = &esp_offload;
+	net_if_offload_set(iface, &esp_offload);
 
 	return 0;
 }

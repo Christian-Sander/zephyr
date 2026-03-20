@@ -9,8 +9,26 @@ description: |
   - SWION should be connected to half the IO level voltage (1.65V for 3.3V systems)
   - SW_SEL must be HIGH (either via GPIO control or hardwired)
 
-  Example:
+compatible: "adi,tmc51xx"
 
+include: [uart-device.yaml, "adi,tmc51xx-base.yaml"]
+
+properties:
+  sw-sel-gpios:
+    type: phandle-array
+    description: |
+      GPIO connected to the SW_SEL pin of TMC51XX.
+      Must be set HIGH for UART mode operation.
+      If not provided, it's assumed SW_SEL is hardwired to VCC/HIGH.
+
+  uart-device-addr:
+    type: int
+    description: |
+        UART device address for TMC51XX in UART mode.
+        Valid range: 0 - 253
+
+examples:
+  - |
     &uart2 {
         current-speed = <115200>;
         status = "okay";
@@ -24,8 +42,8 @@ description: |
             en-pwm-mode;
             invert-direction;
 
-            tmc51xx_stepper_driver: stepper_driver {
-                compatible = "adi,tmc51xx-stepper-drv";
+            tmc51xx_stepper_driver: stepper-driver {
+                compatible = "adi,tmc51xx-stepper-driver";
                 micro-step-res = <256>;
 
                 /* ADI TMC stallguard settings specific to TMC51XX */
@@ -33,8 +51,8 @@ description: |
             };
 
             /* common stepper controller settings */
-            tmc51xx_motion_controller: motion_controller {
-              compatible = "adi,tmc51xx-stepper";
+            tmc51xx_motion_controller: motion-controller {
+              compatible = "adi,tmc51xx-stepper-ctrl";
 
               /* ADI TMC stallguard settings specific to TMC5160 */
               activate-stallguard2;
@@ -60,21 +78,3 @@ description: |
             };
         };
     };
-
-compatible: "adi,tmc51xx"
-
-include: [uart-device.yaml, "adi,tmc51xx-base.yaml"]
-
-properties:
-  sw-sel-gpios:
-    type: phandle-array
-    description: |
-      GPIO connected to the SW_SEL pin of TMC51XX.
-      Must be set HIGH for UART mode operation.
-      If not provided, it's assumed SW_SEL is hardwired to VCC/HIGH.
-
-  uart-device-addr:
-    type: int
-    description: |
-        UART device address for TMC51XX in UART mode.
-        Valid range: 0 - 253

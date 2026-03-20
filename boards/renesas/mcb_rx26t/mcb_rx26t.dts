@@ -41,7 +41,7 @@
 
 		led4: led4 {
 			gpios = <&ioport6 4 GPIO_ACTIVE_LOW>;
-			label = "LED3";
+			label = "LED4";
 		};
 	};
 
@@ -76,6 +76,10 @@
 };
 
 &ioport6 {
+	status = "okay";
+};
+
+&group_irq_bl0 {
 	status = "okay";
 };
 

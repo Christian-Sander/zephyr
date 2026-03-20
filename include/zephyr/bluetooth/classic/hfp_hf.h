@@ -28,8 +28,16 @@ extern "C" {
 #define BT_HFP_HF_CODEC_MSBC    0x02
 #define BT_HFP_HF_CODEC_LC3_SWB 0x03
 
+/**
+ * @struct bt_hfp_hf
+ * @brief HFP HF structure
+ */
 struct bt_hfp_hf;
 
+/**
+ * @struct bt_hfp_hf_call
+ * @brief HFP HF call structure
+ */
 struct bt_hfp_hf_call;
 
 /** @brief The status of the call
@@ -275,7 +283,7 @@ struct bt_hfp_hf_cb {
 	 *  @param number Notified phone number.
 	 *  @param type Specify the format of the phone number.
 	 */
-	void (*clip)(struct bt_hfp_hf_call *call, char *number, uint8_t type);
+	void (*clip)(struct bt_hfp_hf_call *call, const char *number, uint8_t type);
 	/** HF microphone gain notification callback to application
 	 *
 	 *  If this callback is provided it will be called whenever there
@@ -326,7 +334,7 @@ struct bt_hfp_hf_cb {
 	 *                  representing the name of the network
 	 *                  operator.
 	 */
-	void (*operator)(struct bt_hfp_hf *hf, uint8_t mode, uint8_t format, char *operator);
+	void (*operator)(struct bt_hfp_hf *hf, uint8_t mode, uint8_t format, const char *operator);
 	/** Codec negotiate callback
 	 *
 	 *  If this callback is provided it will be called whenever the
@@ -375,7 +383,7 @@ struct bt_hfp_hf_cb {
 	 *  @param number Notified phone number.
 	 *  @param type Specify the format of the phone number.
 	 */
-	void (*call_waiting)(struct bt_hfp_hf_call *call, char *number, uint8_t type);
+	void (*call_waiting)(struct bt_hfp_hf_call *call, const char *number, uint8_t type);
 	/** Voice recognition activation/deactivation callback
 	 *
 	 *  If this callback is provided it will be called whenever the
@@ -443,7 +451,7 @@ struct bt_hfp_hf_cb {
 	 *  @param text Value of `<string>`.
 	 */
 	void (*textual_representation)(struct bt_hfp_hf *hf, char *id, uint8_t type,
-				       uint8_t operation, char *text);
+				       uint8_t operation, const char *text);
 	/** Request phone number callback
 	 *
 	 *  If this callback is provided it will be called whenever the

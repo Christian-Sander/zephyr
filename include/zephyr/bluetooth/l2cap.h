@@ -498,6 +498,8 @@ struct bt_l2cap_br_window {
 	uint8_t sar;
 	/** srej flag */
 	bool srej;
+	/** retransmit flag */
+	bool retransmit;
 	/* Save PDU state */
 	struct net_buf_simple_state sdu_state;
 	/** @internal Holds the sending buffer. */
@@ -1045,6 +1047,12 @@ int bt_l2cap_chan_disconnect(struct bt_l2cap_chan *chan);
  *
  *  @note Buffer ownership is transferred to the stack in case of success, in
  *  case of an error the caller retains the ownership of the buffer.
+ *
+ *  @warning If the buffer's pool has a destroy callback defined, that callback
+ *  may be invoked from the ISR context when the HCI driver releases the buffer.
+ *  Thus, the destroy callback must not call any synchronization primitives
+ *  that are unsafe in the ISR context, i. e. blocking calls or locking the
+ *  scheduler.
  *
  *  @param chan The channel to send the data to. See @ref bt_l2cap_chan_connect
  *              for more details.

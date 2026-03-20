@@ -21,6 +21,7 @@
 #include <esp_timer.h>
 #include <hal/gpio_hal.h>
 #include <hal/rtc_io_hal.h>
+#include <soc/io_mux_reg.h>
 #include <soc/sdmmc_reg.h>
 #include <esp_memory_utils.h>
 
@@ -891,7 +892,7 @@ static void configure_pin_iomux(int gpio_num)
 	uint32_t reg = GPIO_PIN_MUX_REG[gpio_num];
 
 	PIN_INPUT_ENABLE(reg);
-	gpio_hal_iomux_func_sel(reg, sdmmc_func);
+	PIN_FUNC_SELECT(reg, sdmmc_func);
 	PIN_SET_DRV(reg, drive_strength);
 }
 
@@ -1423,11 +1424,10 @@ static DEVICE_API(sdhc, sdhc_api) = {
 					.ddr50_support = false,                                    \
 					.sdr104_support = false,                                   \
 					.sdr50_support = false,                                    \
-					.bus_8_bit_support = false,                                \
-					.bus_4_bit_support =                                       \
-						(DT_INST_PROP(n, bus_width) == 4) ? true : false,  \
-					.hs200_support = false,                                    \
-					.hs400_support = false}}};                                 \
+					.bus_8_bit_support = false},                               \
+			  .bus_4_bit_support = DT_INST_PROP(n, bus_width) == 4,                    \
+			  .hs200_support = false,                                                  \
+			  .hs400_support = false}};                                                \
                                                                                                    \
 	static struct sdhc_esp32_data sdhc_esp32_##n##_data = {                                    \
 		.bus_width = SDMMC_SLOT_WIDTH_DEFAULT,                                             \

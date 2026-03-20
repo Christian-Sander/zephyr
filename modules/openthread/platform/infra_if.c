@@ -23,10 +23,10 @@
 #include <zephyr/net/socket_service.h>
 #include <icmpv6.h>
 
-#if defined(CONFIG_OPENTHREAD_NAT64_TRANSLATOR)
+#if defined(CONFIG_OPENTHREAD_ZEPHYR_BORDER_ROUTER_NAT64_TRANSLATOR)
 #include <zephyr/net/net_pkt_filter.h>
 #include <openthread/nat64.h>
-#endif /* CONFIG_OPENTHREAD_NAT64_TRANSLATOR */
+#endif /* CONFIG_OPENTHREAD_ZEPHYR_BORDER_ROUTER_NAT64_TRANSLATOR */
 
 static struct otInstance *ot_instance;
 static struct net_if *ail_iface_ptr;
@@ -38,7 +38,8 @@ static struct net_in6_addr mcast_addr;
 
 static void infra_if_handle_backbone_icmp6(struct otbr_msg_ctx *msg_ctx_ptr);
 static void handle_ra_from_ot(const uint8_t *buffer, uint16_t buffer_length);
-#if defined(CONFIG_OPENTHREAD_NAT64_TRANSLATOR)
+
+#if defined(CONFIG_OPENTHREAD_ZEPHYR_BORDER_ROUTER_NAT64_TRANSLATOR)
 #define MAX_SERVICES CONFIG_OPENTHREAD_ZEPHYR_BORDER_ROUTER_NAT64_SERVICES
 
 static struct zsock_pollfd sockfd_raw[MAX_SERVICES];
@@ -57,7 +58,7 @@ static struct ot_nat64_pkt_filter_test ot_nat64_drop_rule_check = {
 	.test.fn = infra_if_nat64_try_consume_packet};
 /* Drop all traffic destined to and consumed by NAT64 translator */
 static NPF_RULE(ot_nat64_drop_pkt_process, NET_DROP, ot_nat64_drop_rule_check);
-#endif /* CONFIG_OPENTHREAD_NAT64_TRANSLATOR */
+#endif /* CONFIG_OPENTHREAD_ZEPHYR_BORDER_ROUTER_NAT64_TRANSLATOR */
 
 otError otPlatInfraIfSendIcmp6Nd(uint32_t aInfraIfIndex, const otIp6Address *aDestAddress,
 				 const uint8_t *aBuffer, uint16_t aBufferLength)
@@ -153,11 +154,7 @@ otError infra_if_init(otInstance *instance, struct net_if *ail_iface)
 	net_ipv6_addr_create_ll_allrouters_mcast(&mcast_addr);
 	ret = net_ipv6_mld_join(ail_iface, &mcast_addr);
 
-	VerifyOrExit((ret == 0 || ret == -EALREADY), error = OT_ERROR_FAILED);
-
-	for (uint8_t i = 0; i < MAX_SERVICES; i++) {
-		sockfd_raw[i].fd = -1;
-	}
+	VerifyOrExit((ret == 0), error = OT_ERROR_FAILED);
 exit:
 	return error;
 }
@@ -242,9 +239,9 @@ static void handle_ra_from_ot(const uint8_t *buffer, uint16_t buffer_length)
 	}
 }
 
-static int handle_icmp6_input(struct net_icmp_ctx *ctx, struct net_pkt *pkt,
-			      struct net_icmp_ip_hdr *hdr,
-			      struct net_icmp_hdr *icmp_hdr, void *user_data)
+static enum net_verdict handle_icmp6_input(struct net_icmp_ctx *ctx, struct net_pkt *pkt,
+					   struct net_icmp_ip_hdr *hdr,
+					   struct net_icmp_hdr *icmp_hdr, void *user_data)
 {
 	uint16_t length = net_pkt_get_len(pkt);
 	struct otbr_msg_ctx *req = NULL;
@@ -267,10 +264,10 @@ static int handle_icmp6_input(struct net_icmp_ctx *ctx, struct net_pkt *pkt,
 
 exit:
 	if (error == OT_ERROR_NONE) {
-		return 0;
+		return NET_CONTINUE;
 	}
 
-	return -1;
+	return NET_DROP;
 }
 
 static void infra_if_handle_backbone_icmp6(struct otbr_msg_ctx *msg_ctx_ptr)
@@ -306,13 +303,17 @@ void infra_if_stop_icmp6_listener(void)
 	(void)net_icmp_cleanup_ctx(&na_ctx);
 }
 
-#if defined(CONFIG_OPENTHREAD_NAT64_TRANSLATOR)
+#if defined(CONFIG_OPENTHREAD_ZEPHYR_BORDER_ROUTER_NAT64_TRANSLATOR)
 otError infra_if_nat64_init(void)
 {
 	otError error = OT_ERROR_NONE;
 	struct net_sockaddr_in anyaddr = {.sin_family = NET_AF_INET,
 					  .sin_port = 0,
 					  .sin_addr = NET_INADDR_ANY_INIT};
+
+	for (uint8_t i = 0; i < MAX_SERVICES; i++) {
+		sockfd_raw[i].fd = -1;
+	}
 
 	raw_infra_if_sock = zsock_socket(NET_AF_INET, NET_SOCK_RAW, NET_IPPROTO_IP);
 	VerifyOrExit(raw_infra_if_sock >= 0, error = OT_ERROR_FAILED);
@@ -329,6 +330,28 @@ otError infra_if_nat64_init(void)
 
 	npf_insert_ipv4_recv_rule(&ot_nat64_drop_pkt_process);
 	npf_append_ipv4_recv_rule(&npf_default_ok);
+
+exit:
+	return error;
+}
+
+otError infra_if_nat64_deinit(void)
+{
+	otError error = OT_ERROR_NONE;
+
+	VerifyOrExit(raw_infra_if_sock != -1, error = OT_ERROR_INVALID_STATE);
+	VerifyOrExit(zsock_close(raw_infra_if_sock) == 0, error = OT_ERROR_FAILED);
+
+	sockfd_raw[0].fd = -1;
+	raw_infra_if_sock = -1;
+
+	VerifyOrExit(net_socket_service_register(&handle_infra_if_raw_recv, sockfd_raw,
+						 ARRAY_SIZE(sockfd_raw), NULL) == 0,
+		     error = OT_ERROR_FAILED);
+
+	VerifyOrExit(npf_remove_ipv4_recv_rule(&ot_nat64_drop_pkt_process) &&
+		     npf_remove_ipv4_recv_rule(&npf_default_ok),
+		     error = OT_ERROR_FAILED);
 
 exit:
 	return error;
@@ -432,7 +455,6 @@ static void remove_checksums_for_eth_offloading(uint8_t *buf, uint16_t len)
 
 static bool infra_if_nat64_try_consume_packet(struct npf_test *test, struct net_pkt *pkt)
 {
-	ARG_UNUSED(test);
 
 	struct net_buf *buf = NULL;
 	otMessage *message = NULL;
@@ -468,5 +490,4 @@ exit:
 	openthread_mutex_unlock();
 	return false;
 }
-
-#endif /* CONFIG_OPENTHREAD_NAT64_TRANSLATOR */
+#endif /* CONFIG_OPENTHREAD_ZEPHYR_BORDER_ROUTER_NAT64_TRANSLATOR */

@@ -5,6 +5,7 @@
  */
 
 #include <soc.h>
+#include <stm32_bitops.h>
 #include <stm32_ll_bus.h>
 #include <stm32_ll_pwr.h>
 #include <stm32_ll_rcc.h>
@@ -250,8 +251,9 @@ static int stm32_clock_control_configure(const struct device *dev,
 					 void *data)
 {
 	struct stm32_pclken *pclken = (struct stm32_pclken *)sub_system;
-	const uint32_t shift = STM32_DT_CLKSEL_SHIFT_GET(pclken->enr);
-	mem_addr_t reg = RCC_REG(STM32_DT_CLKSEL_REG_GET(pclken->enr));
+	uint32_t enr = pclken->enr;
+	uint32_t reg = STM32_DT_CLKSEL_REG_GET(enr);
+	uint32_t shift = STM32_DT_CLKSEL_SHIFT_GET(enr);
 	int err;
 
 	ARG_UNUSED(dev);
@@ -263,8 +265,14 @@ static int stm32_clock_control_configure(const struct device *dev,
 		return err;
 	}
 
-	sys_clear_bits(reg, STM32_DT_CLKSEL_MASK_GET(pclken->enr) << shift);
-	sys_set_bits(reg, STM32_DT_CLKSEL_VAL_GET(pclken->enr) << shift);
+	if (pclken->enr == NO_SEL) {
+		/* Domain clock is fixed. Nothing to set. Exit */
+		return 0;
+	}
+
+	stm32_reg_modify_bits((uint32_t *)(DT_REG_ADDR(DT_NODELABEL(rcc)) + reg),
+			      STM32_DT_CLKSEL_MASK_GET(enr) << shift,
+			      STM32_DT_CLKSEL_VAL_GET(enr) << shift);
 
 	return 0;
 }

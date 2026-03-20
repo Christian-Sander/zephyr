@@ -31,7 +31,6 @@
 #include <zephyr/net_buf.h>
 #include <zephyr/sys/__assert.h>
 #include <zephyr/sys/byteorder.h>
-#include <zephyr/sys/check.h>
 #include <zephyr/sys/util.h>
 #include <zephyr/sys/util_macro.h>
 #include <zephyr/toolchain.h>
@@ -1714,7 +1713,7 @@ int bt_ascs_config_ase(struct bt_conn *conn, struct bt_bap_stream *stream,
 	struct bt_bap_ep *ep;
 	int err;
 
-	CHECKIF(conn == NULL || stream == NULL || codec_cfg == NULL || qos_pref == NULL) {
+	if (conn == NULL || stream == NULL || codec_cfg == NULL || qos_pref == NULL) {
 		LOG_DBG("NULL value(s) supplied)");
 		return -EINVAL;
 	}
@@ -3184,7 +3183,6 @@ static int control_point_notify(struct bt_conn *conn, const void *data, uint16_t
 }
 
 static struct bt_iso_server iso_server = {
-	.sec_level = BT_SECURITY_L2,
 	.accept = ascs_iso_accept,
 };
 
@@ -3226,10 +3224,11 @@ void bt_ascs_cleanup(void)
 	}
 }
 
+static const struct bt_gatt_attr ascs_attrs_backup[] = BT_ASCS_SERVICE_DEFINITION();
+BUILD_ASSERT(sizeof(ascs_attrs_backup) == sizeof(ascs_attrs));
 int bt_ascs_unregister(void)
 {
 	int err;
-	struct bt_gatt_attr _ascs_attrs[] = BT_ASCS_SERVICE_DEFINITION();
 
 	if (!ascs.registered) {
 		LOG_DBG("No ascs instance registered");
@@ -3253,10 +3252,23 @@ int bt_ascs_unregister(void)
 		return err;
 	}
 
-	memcpy(&ascs_attrs, &_ascs_attrs, sizeof(struct bt_gatt_attr));
+	(void)memcpy(ascs_attrs, ascs_attrs_backup, sizeof(ascs_attrs_backup));
+	ascs_svc.attr_count = ARRAY_SIZE(ascs_attrs);
 	ascs.registered = false;
 
 	return err;
 }
 
+struct bt_conn *bt_ascs_ep_get_conn(const struct bt_bap_ep *ep)
+{
+	struct bt_ascs_ase *ase = CONTAINER_OF(ep, struct bt_ascs_ase, ep);
+
+	__ASSERT_NO_MSG(bt_ascs_has_ep(ep));
+
+	if (ase->conn == NULL) {
+		return NULL;
+	}
+
+	return bt_conn_ref(ase->conn);
+}
 #endif /* BT_BAP_UNICAST_SERVER */

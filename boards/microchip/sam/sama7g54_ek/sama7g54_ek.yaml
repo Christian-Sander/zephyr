@@ -14,8 +14,9 @@ supported:
   - crypto
   - dma
   - entropy
+  - hwinfo
   - pwm
+  - rtc
   - sdhc
-  - shell
   - uart
 vendor: microchip

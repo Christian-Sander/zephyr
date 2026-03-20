@@ -13,3 +13,29 @@
 &p5_1_scb0_uart_rx {
 	input-enable;
 };
+
+&p6_3_scb1_i2c_scl {
+	drive-open-drain;
+	input-enable;
+};
+
+&p6_4_scb1_i2c_sda {
+	drive-open-drain;
+	input-enable;
+};
+
+&p4_0_scb1_spi_m_select0 {
+	drive-push-pull;
+};
+
+&p4_4_scb1_spi_m_mosi {
+	drive-push-pull;
+};
+
+&p4_5_scb1_spi_m_miso {
+	input-enable;
+};
+
+&p4_6_scb1_spi_m_clk {
+	drive-push-pull;
+};

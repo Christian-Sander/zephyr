@@ -198,6 +198,7 @@ config NET_IPV4_MAPPING_TO_IPV6
 config NET_TC_TX_COUNT
 	int "How many Tx traffic classes to have for each network device"
 	default 1 if USERSPACE || USB_DEVICE_NETWORK || \
+		     USBD_CDC_ECM_CLASS || USBD_CDC_NCM_CLASS || \
 		     NET_SHELL_REQUIRE_TX_THREAD
 	default 0
 	range 1 NET_TC_NUM_PRIORITIES if NET_TC_NUM_PRIORITIES<=8 && \
@@ -541,7 +542,8 @@ config NET_MAX_CONTEXTS
 
 config ZVFS_OPEN_ADD_SIZE_NET
 	int "Number of network sockets to allocate"
-	default NET_MAX_CONTEXTS
+	default NET_MAX_CONTEXTS if NET_NATIVE && NET_SOCKETS
+	default 0
 
 config NET_CONTEXT_NET_PKT_POOL
 	bool "Net_buf TX pool / context"

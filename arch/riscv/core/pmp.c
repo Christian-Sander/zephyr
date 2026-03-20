@@ -318,7 +318,7 @@ extern void z_riscv_write_pmp_entries(unsigned int start, unsigned int end,
 /**
  * @brief Write a range of PMP entries to corresponding PMP registers
  *
- * This performs some sanity checks before calling z_riscv_write_pmp_entries().
+ * This performs some coherence checks before calling z_riscv_write_pmp_entries().
  *
  * @param start Start of the PMP range to be written
  * @param end End (exclusive) of the PMP range to be written
@@ -612,10 +612,25 @@ void z_riscv_pmp_init(void)
 
 	/* The read-only area is always there for every mode */
 	set_pmp_entry(&index,
-		      PMP_R | PMP_X | COND_CODE_1(CONFIG_PMP_NO_LOCK_GLOBAL, (0x0), (PMP_L)),
+		      PMP_R | PMP_X | COND_CODE_1(CONFIG_PMP_NO_LOCK_GLOBAL, (0x0),
+		      (COND_CODE_1(CONFIG_PMP_UNLOCK_ROM_FOR_DEBUG, (0x0),
+		      (PMP_L)))),
 		      (uintptr_t)__rom_region_start,
 		      (size_t)__rom_region_size,
 		      pmp_addr, pmp_cfg, ARRAY_SIZE(pmp_addr));
+
+	/* SoC-specific PMP regions defined via iterable sections */
+	STRUCT_SECTION_FOREACH(pmp_soc_region, region) {
+		uintptr_t start = (uintptr_t)region->start;
+		size_t size = (uintptr_t)region->end - start;
+
+		if (size > 0) {
+			set_pmp_entry(&index, region->perm | COND_CODE_1(CONFIG_PMP_NO_LOCK_GLOBAL,
+								 (0x0), (PMP_L)), start,
+									  size, pmp_addr, pmp_cfg,
+									  ARRAY_SIZE(pmp_addr));
+		}
+	}
 
 #ifdef CONFIG_PMP_STACK_GUARD
 #ifdef CONFIG_MULTITHREADING
@@ -654,7 +669,7 @@ void z_riscv_pmp_init(void)
 	attr_cnt = set_pmp_mem_attr(&index, pmp_addr, pmp_cfg, ARRAY_SIZE(pmp_addr));
 #endif /* CONFIG_MEM_ATTR */
 
-#if defined(CONFIG_MEM_ATTR) || defined(CONFIG_PMP_NO_LOCK_GLOBAL)
+#ifdef CONFIG_PMP_KERNEL_MODE_DYNAMIC
 	/*
 	 * This early, we want to protect unlock PMP entries as soon as
 	 * possible. But we need a temporary default "catch all" PMP entry for

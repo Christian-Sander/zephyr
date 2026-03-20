@@ -71,7 +71,7 @@ static const struct device *nrf5_dev;
 #define NSEC_PER_TEN_SYMBOLS (10 * IEEE802154_PHY_OQPSK_780_TO_2450MHZ_SYMBOL_PERIOD_NS)
 
 #if defined(CONFIG_IEEE802154_NRF5_UICR_EUI64_ENABLE)
-#if defined(CONFIG_SOC_NRF5340_CPUAPP) || defined(CONFIG_SOC_SERIES_NRF54LX)
+#if defined(CONFIG_SOC_NRF5340_CPUAPP) || defined(CONFIG_SOC_SERIES_NRF54L)
 #if defined(CONFIG_TRUSTED_EXECUTION_NONSECURE)
 #error "NRF_UICR->OTP is not supported to read from non-secure"
 #else
@@ -79,7 +79,7 @@ static const struct device *nrf5_dev;
 #endif /* CONFIG_TRUSTED_EXECUTION_NONSECURE */
 #else
 #define EUI64_ADDR (NRF_UICR->CUSTOMER)
-#endif /* CONFIG_SOC_NRF5340_CPUAPP || CONFIG_SOC_SERIES_NRF54LX*/
+#endif /* CONFIG_SOC_NRF5340_CPUAPP || CONFIG_SOC_SERIES_NRF54L */
 #endif /* CONFIG_IEEE802154_NRF5_UICR_EUI64_ENABLE */
 
 #if defined(CONFIG_IEEE802154_NRF5_UICR_EUI64_ENABLE)
@@ -627,7 +627,7 @@ static int nrf5_tx(const struct device *dev,
 		break;
 #endif /* CONFIG_NET_PKT_TXTIME */
 	default:
-		NET_ERR("TX mode %d not supported", mode);
+		LOG_ERR("TX mode %d not supported", mode);
 		return -ENOTSUP;
 	}
 

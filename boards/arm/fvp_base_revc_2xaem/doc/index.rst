@@ -22,21 +22,7 @@ Hardware
 Supported Features
 ==================
 
-The following hardware features are supported:
-
-+-----------------------+------------+----------------------+
-| Interface             | Controller | Driver/Component     |
-+=======================+============+======================+
-| GICv3                 | on-chip    | interrupt controller |
-+-----------------------+------------+----------------------+
-| PL011 UART            | on-chip    | serial port          |
-+-----------------------+------------+----------------------+
-| ARM GENERIC TIMER     | on-chip    | system clock         |
-+-----------------------+------------+----------------------+
-| SMSC_91C111           | on-chip    | ethernet device      |
-+-----------------------+------------+----------------------+
-
-The kernel currently does not support other hardware features on this platform.
+.. zephyr:board-supported-hw::
 
 Board Variants
 ==============
@@ -183,4 +169,4 @@ References
 **********
 
 - `Arm Architecture Reference Manual - Armv8 <https://developer.arm.com/documentation/ddi0487/latest>`_
-- `Fixed Virtual Platforms <https://developer.arm.com/tools-and-software/simulation-models/fixed-virtual-platforms>`_
+- `Fixed Virtual Platforms <https://developer.arm.com/Tools%20and%20Software/Fixed%20Virtual%20Platforms/Arm%20Architecture%20FVPs>`_

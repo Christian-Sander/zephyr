@@ -1214,8 +1214,16 @@ static int mcux_flexcomm_pm_action(const struct device *dev, enum pm_device_acti
 
 	switch (action) {
 	case PM_DEVICE_ACTION_RESUME:
+		ret = pinctrl_apply_state(config->pincfg, PINCTRL_STATE_DEFAULT);
+		if (ret < 0 && ret != -ENOENT) {
+			return ret;
+		}
 		break;
 	case PM_DEVICE_ACTION_SUSPEND:
+		ret = pinctrl_apply_state(config->pincfg, PINCTRL_STATE_SLEEP);
+		if (ret < 0 && ret != -ENOENT) {
+			return ret;
+		}
 		break;
 	case PM_DEVICE_ACTION_TURN_OFF:
 		data->usart_intenset = USART_GetEnabledInterrupts(config->base);
@@ -1439,8 +1447,9 @@ static void serial_mcux_flexcomm_##n##_pm_exit(enum pm_state state, uint8_t subs
 static const struct mcux_flexcomm_config mcux_flexcomm_##n##_config = {		\
 	.base = (USART_Type *)DT_INST_REG_ADDR(n),				\
 	.clock_dev = DEVICE_DT_GET(DT_INST_CLOCKS_CTLR(n)),			\
-	.clock_subsys =								\
-	(clock_control_subsys_t)DT_INST_CLOCKS_CELL(n, name),			\
+	.clock_subsys = (clock_control_subsys_t)COND_CODE_1(			\
+		DT_PHA_HAS_CELL(DT_DRV_INST(n), clocks, name),			\
+		(DT_INST_CLOCKS_CELL(n, name)), (0U)),				\
 	.baud_rate = DT_INST_PROP(n, current_speed),				\
 	.parity = DT_INST_ENUM_IDX(n, parity),					\
 	.pincfg = PINCTRL_DT_INST_DEV_CONFIG_GET(n),				\

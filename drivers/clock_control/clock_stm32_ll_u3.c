@@ -5,6 +5,7 @@
  */
 
 #include <soc.h>
+#include <stm32_bitops.h>
 #include <stm32_ll_bus.h>
 #include <stm32_ll_pwr.h>
 #include <stm32_ll_rcc.h>
@@ -158,6 +159,9 @@ static int stm32_clock_control_configure(const struct device *dev,
 					 void *data)
 {
 	struct stm32_pclken *pclken = (struct stm32_pclken *)sub_system;
+	uint32_t enr = pclken->enr;
+	uint32_t reg = STM32_DT_CLKSEL_REG_GET(enr);
+	uint32_t shift = STM32_DT_CLKSEL_SHIFT_GET(enr);
 	int err;
 
 	ARG_UNUSED(dev);
@@ -174,12 +178,9 @@ static int stm32_clock_control_configure(const struct device *dev,
 		return 0;
 	}
 
-	sys_clear_bits(DT_REG_ADDR(DT_NODELABEL(rcc)) + STM32_DT_CLKSEL_REG_GET(pclken->enr),
-		       STM32_DT_CLKSEL_MASK_GET(pclken->enr) <<
-			STM32_DT_CLKSEL_SHIFT_GET(pclken->enr));
-	sys_set_bits(DT_REG_ADDR(DT_NODELABEL(rcc)) + STM32_DT_CLKSEL_REG_GET(pclken->enr),
-		     STM32_DT_CLKSEL_VAL_GET(pclken->enr) <<
-			STM32_DT_CLKSEL_SHIFT_GET(pclken->enr));
+	stm32_reg_modify_bits((uint32_t *)(DT_REG_ADDR(DT_NODELABEL(rcc)) + reg),
+			      STM32_DT_CLKSEL_MASK_GET(enr) << shift,
+			      STM32_DT_CLKSEL_VAL_GET(enr) << shift);
 
 	return 0;
 }
@@ -330,6 +331,24 @@ static void enable_epod_booster(void)
 	}
 }
 
+#if STM32_MSIK_PLL_MODE || STM32_MSIS_PLL_MODE
+
+/* MSIS and MSIK in PLL mode depends on LSE at 32768Hz (mandatory if present)
+ * or HSE at 16MHz or 32MHz.
+ *
+ * Note: STM32_xSE_FREQ is 0 when related xSE clock is disable.
+ * Use two asserts for more precise error messages.
+ */
+#define MSI_PLL_SOURCE_CLOCK_IS_VALID	((STM32_LSE_FREQ == 32768) || \
+					 (STM32_HSE_FREQ == 32000000) || \
+					 (STM32_HSE_FREQ == 16000000))
+
+BUILD_ASSERT(MSI_PLL_SOURCE_CLOCK_IS_VALID || !STM32_MSIK_PLL_MODE,
+	"MSIK PLL mode requires LSE or HSE clock to be enabled for auto-calibration");
+
+BUILD_ASSERT(MSI_PLL_SOURCE_CLOCK_IS_VALID || !STM32_MSIS_PLL_MODE,
+	"MSIS PLL mode requires LSE or HSE clock to be enabled for auto-calibration");
+
 static void configure_clock_with_calibration(int range)
 {
 	LL_RCC_SetSysClkSource(LL_RCC_SYS_CLKSOURCE_MSIS);
@@ -343,10 +362,6 @@ static void configure_clock_with_calibration(int range)
 	LL_RCC_SetAPB2Prescaler(LL_RCC_APB2_HCLK_DIV_1);
 	LL_RCC_SetAPB3Prescaler(LL_RCC_APB3_HCLK_DIV_1);
 
-	BUILD_ASSERT(STM32_LSE_ENABLED || !IS_ENABLED(STM32_MSIK_ENABLED),
-		"MSIK requires LSE clock to be enabled for auto-calibration");
-	BUILD_ASSERT(STM32_LSE_ENABLED || !IS_ENABLED(STM32_MSIS_ENABLED),
-		"MSIS requires LSE clock to be enabled for auto-calibration");
 	if (IN_RANGE(range, 0, 3)) {
 		/*
 		 * LSE or HSE must be enabled and ready before selecting
@@ -375,6 +390,7 @@ static void configure_clock_with_calibration(int range)
 		}
 	}
 }
+#endif /* STM32_MSIK_PLL_MODE || STM32_MSIS_PLL_MODE */
 
 static void set_up_fixed_clock_sources(void)
 {
@@ -495,7 +511,9 @@ static void set_up_fixed_clock_sources(void)
 		while (LL_RCC_MSIS_IsReady() == 0U) {
 		}
 
+#if STM32_MSIS_PLL_MODE
 		configure_clock_with_calibration(STM32_MSIS_RANGE);
+#endif /* STM32_MSIS_PLL_MODE */
 	}
 
 	if (IS_ENABLED(STM32_MSIK_ENABLED)) {
@@ -561,7 +579,9 @@ static void set_up_fixed_clock_sources(void)
 		while (LL_RCC_MSIK_IsReady() == 0U) {
 		}
 
+#if STM32_MSIK_PLL_MODE
 		configure_clock_with_calibration(STM32_MSIK_RANGE);
+#endif /* STM32_MSIK_PLL_MODE */
 	}
 
 	if (IS_ENABLED(STM32_LSI_ENABLED)) {
@@ -625,6 +645,7 @@ int stm32_clock_control_init(const struct device *dev)
 	while (LL_RCC_GetSysClkSource() != LL_RCC_SYS_CLKSOURCE_STATUS_HSI16) {
 	}
 #else
+	__ASSERT(0, "Invalid SYSCLK source selected");
 	return -ENOTSUP;
 #endif
 

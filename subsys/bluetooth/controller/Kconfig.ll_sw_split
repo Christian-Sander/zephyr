@@ -23,7 +23,7 @@ config BT_LLL_VENDOR_NORDIC
 					 !BT_CTLR_DATA_LENGTH_CLEAR && \
 					 !BT_CTLR_PHY_2M_NRF
 	select BT_CTLR_PRIVACY_SUPPORT if BT_CTLR_CRYPTO_SUPPORT && \
-					  !SOC_SERIES_NRF51X
+					  !SOC_SERIES_NRF51
 	select BT_CTLR_CONN_PARAM_REQ_SUPPORT
 	select BT_CTLR_EXT_REJ_IND_SUPPORT
 	select BT_CTLR_PER_INIT_FEAT_XCHG_SUPPORT
@@ -255,7 +255,34 @@ config BT_CTLR_CHECK_SAME_PEER_SYNC
 	depends on BT_CTLR_SYNC_PERIODIC
 	default BT_PER_ADV_SYNC_MAX > 1
 
+config BT_CTLR_ADV_AUX_SET
+	int "LE Extended Advertising Auxiliary Sets"
+	depends on BT_BROADCASTER
+	range 0 BT_CTLR_ADV_SET
+	default BT_CTLR_ADV_SET
+	help
+	  Maximum supported advertising auxiliary channel sets.
+
+config BT_CTLR_ADV_SYNC_SET
+	int "LE Periodic Advertising Sets"
+	depends on BT_CTLR_ADV_PERIODIC
+	range 1 BT_CTLR_ADV_AUX_SET
+	default 1
+	help
+	  Maximum supported periodic advertising sets.
+
 endif # BT_CTLR_ADV_EXT
+
+config BT_CTLR_ADV_DATA_BUF_MAX
+	int "Advertising Data Maximum Buffers"
+	depends on BT_BROADCASTER
+	range 1 64 if BT_CTLR_ADV_EXT
+	range 1 1 if !BT_CTLR_ADV_EXT
+	default 2 if BT_CTLR_ADV_PERIODIC
+	default 1
+	help
+	  Maximum number of buffered Advertising Data payload across enabled
+	  advertising sets.
 
 module = BT_CTLR_ISOAL
 module-str = "Bluetooth Controller ISO-AL"
@@ -356,7 +383,7 @@ config BT_CTLR_TRPA_CACHE_SIZE
 
 config BT_CTLR_DATA_LENGTH_CLEAR
 	bool "Data Length Support (Cleartext only)"
-	depends on SOC_SERIES_NRF51X
+	depends on SOC_SERIES_NRF51
 	help
 	  Enable support for Bluetooth v4.2 LE Data Length Update procedure, up to
 	  251 byte cleartext payloads in the Controller. Encrypted connections
@@ -365,26 +392,10 @@ config BT_CTLR_DATA_LENGTH_CLEAR
 
 config BT_CTLR_PHY_2M_NRF
 	bool "2Mbps Nordic Semiconductor PHY Support (Cleartext only)"
-	depends on SOC_SERIES_NRF51X
+	depends on SOC_SERIES_NRF51
 	help
 	  Enable support for Nordic Semiconductor proprietary 2Mbps PHY in the
 	  Controller. Encrypted connections are not supported.
-
-config BT_CTLR_ADV_AUX_SET
-	int "LE Extended Advertising Auxiliary Sets"
-	depends on BT_BROADCASTER && BT_CTLR_ADV_EXT
-	range 0 BT_CTLR_ADV_SET
-	default BT_CTLR_ADV_SET
-	help
-	  Maximum supported advertising auxiliary channel sets.
-
-config BT_CTLR_ADV_SYNC_SET
-	int "LE Periodic Advertising Sets"
-	depends on BT_CTLR_ADV_PERIODIC
-	range 1 BT_CTLR_ADV_AUX_SET
-	default 1
-	help
-	  Maximum supported periodic advertising sets.
 
 config BT_CTLR_ADV_DATA_CHAIN
 	bool "Advertising Data chaining [EXPERIMENTAL]"
@@ -507,17 +518,6 @@ config BT_CTLR_ADV_AUX_SYNC_OFFSET
 	  periodic interval.
 	  The offset is in microseconds, limited to an experimental maximum
 	  value of 4 seconds.
-
-config BT_CTLR_ADV_DATA_BUF_MAX
-	int "Advertising Data Maximum Buffers"
-	depends on BT_BROADCASTER
-	range 1 64 if BT_CTLR_ADV_EXT
-	range 1 1 if !BT_CTLR_ADV_EXT
-	default 2 if BT_CTLR_ADV_PERIODIC
-	default 1
-	help
-	  Maximum number of buffered Advertising Data payload across enabled
-	  advertising sets.
 
 config BT_CTLR_ADV_EXT_PDU_EXTRA_DATA_MEMORY
 	bool
@@ -889,7 +889,7 @@ config BT_CTLR_SLOT_RESERVATION_UPDATE
 
 config BT_CTLR_LLL_PRIO
 	int "Lower Link Layer (Radio) IRQ priority" if (BT_CTLR_ULL_LLL_PRIO_SUPPORT && !BT_CTLR_ZLI)
-	range 0 3 if SOC_SERIES_NRF51X
+	range 0 3 if SOC_SERIES_NRF51
 	range 0 6 if (SOC_COMPATIBLE_NRF52X || SOC_COMPATIBLE_NRF53X)
 	default 0
 	help
@@ -897,7 +897,7 @@ config BT_CTLR_LLL_PRIO
 
 config BT_CTLR_ULL_HIGH_PRIO
 	int "Upper Link Layer High IRQ priority" if BT_CTLR_ULL_LLL_PRIO_SUPPORT
-	range BT_CTLR_LLL_PRIO 3 if SOC_SERIES_NRF51X
+	range BT_CTLR_LLL_PRIO 3 if SOC_SERIES_NRF51
 	range BT_CTLR_LLL_PRIO 6 if (SOC_COMPATIBLE_NRF52X || SOC_COMPATIBLE_NRF53X)
 	default BT_CTLR_LLL_PRIO if (!BT_CTLR_ULL_LLL_PRIO_SUPPORT || BT_CTLR_ZLI || BT_CTLR_LOW_LAT)
 	default 1
@@ -907,17 +907,37 @@ config BT_CTLR_ULL_HIGH_PRIO
 
 config BT_CTLR_ULL_LOW_PRIO
 	int "Upper Link Layer Low IRQ priority" if BT_CTLR_ULL_LLL_PRIO_SUPPORT
-	range BT_CTLR_ULL_HIGH_PRIO 3 if SOC_SERIES_NRF51X
+	range BT_CTLR_ULL_HIGH_PRIO 3 if SOC_SERIES_NRF51
 	range BT_CTLR_ULL_HIGH_PRIO 6 if (SOC_COMPATIBLE_NRF52X || SOC_COMPATIBLE_NRF53X)
 	default BT_CTLR_ULL_HIGH_PRIO
 	help
 	  The interrupt priority for Ticker's Job IRQ and Upper Link Layer
 	  lower priority functions.
 
+config BT_CTLR_LLL_PREPARE_AT_MARGIN
+	bool "LLL prepare at margin"
+	depends on !BT_CTLR_LOW_LAT
+	default y if SOC_COMPATIBLE_NRF54LX
+	help
+	  Execute LLL prepare callback at the prepare margin, even when no
+	  overlapping state/role is currently active.
+
+	  This will lead to an additional CPU wake up after initial one at the
+	  prepare tick. LLL prepare callback is executed sufficient time before
+	  the hard real time radio transmission or reception instant so that any
+	  resource that may otherwise consume current if setup at prepare tick
+	  can be delayed until the prepare margin elapses.
+
+	  Disable this option if resources that need to be ready at the hard
+	  real time radio transmission or reception instant can be setup at
+	  prepare tick without impacting current consumption until actual
+	  requirement at the hard real time radio transmission or reception
+	  instant.
+
 config BT_CTLR_LOW_LAT
 	bool "Low latency non-negotiating event preemption"
 	depends on BT_CTLR_LOW_LAT_ULL && BT_CTLR_LOW_LAT_ULL_DONE
-	default y if SOC_SERIES_NRF51X
+	default y if SOC_SERIES_NRF51
 	help
 	  Use low latency non-negotiating event preemption. This reduces
 	  Radio ISR latencies by the controller event scheduling framework.
@@ -926,14 +946,14 @@ config BT_CTLR_LOW_LAT
 
 config BT_CTLR_LOW_LAT_ULL
 	bool "Low latency ULL"
-	default y if SOC_SERIES_NRF51X
+	default y if SOC_SERIES_NRF51
 	help
 	  Low latency ULL implementation that uses tailchaining instead of while
 	  loop to demux rx messages from LLL.
 
 config BT_CTLR_LOW_LAT_ULL_DONE
 	bool "Low latency ULL prepare dequeue"
-	default y if SOC_SERIES_NRF51X
+	default y if SOC_SERIES_NRF51
 	help
 	  Done events be processed and dequeued in ULL context.
 
@@ -1240,7 +1260,7 @@ config BT_TICKER_CNTR_FREE_RUNNING
 
 config BT_TICKER_LOW_LAT
 	bool "Ticker low latency mode"
-	default y if SOC_SERIES_NRF51X
+	default y if SOC_SERIES_NRF51
 	help
 	  This option enables legacy ticker scheduling which defers overlapping
 	  ticker node timeouts and thereby prevents ticker interrupts during

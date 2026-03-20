@@ -23,6 +23,7 @@
 	status = "okay";
 };
 
-&lpcmp2 {
+&sema42 {
+	domain-id = <1>;
 	status = "okay";
 };

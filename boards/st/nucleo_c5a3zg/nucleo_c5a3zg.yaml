@@ -1,0 +1,17 @@
+identifier: nucleo_c5a3zg
+name: ST Nucleo C5A3ZG
+type: mcu
+arch: arm
+toolchain:
+  - zephyr
+  - gnuarmemb
+supported:
+  - arduino_gpio
+  - arduino_serial
+  - counter
+  - gpio
+  - pwm
+  - uart
+ram: 256
+flash: 1024
+vendor: st

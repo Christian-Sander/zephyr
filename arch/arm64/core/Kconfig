@@ -176,13 +176,6 @@ config ARM64_SAFE_EXCEPTION_STACK
 	  used for user stack overflow checking, because kernel stack support
 	  the checking work.
 
-config ARM64_EXCEPTION_STACK_TRACE
-	bool
-	default y
-	depends on FRAME_POINTER
-	help
-	  Internal config to enable runtime stack traces on fatal exceptions.
-
 config ARM64_SAFE_EXCEPTION_STACK_SIZE
 	int "The stack size of the safe exception stack"
 	default 4096
@@ -303,6 +296,7 @@ config ARM_MMU
 	select SRAM_REGION_PERMISSIONS
 	select ARCH_MEM_DOMAIN_SYNCHRONOUS_API if USERSPACE
 	select ARCH_MEM_DOMAIN_DATA if USERSPACE
+	select ARCH_MEM_DOMAIN_SUPPORTS_DEINIT if USERSPACE
 	help
 	  Memory Management Unit support.
 

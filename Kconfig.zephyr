@@ -98,6 +98,32 @@ config USE_DT_CODE_PARTITION
 
 # Workaround for not being able to have commas in macro arguments
 DT_CHOSEN_Z_CODE_PARTITION := zephyr,code-partition
+DT_CHOSEN_Z_FLASH := zephyr,flash
+DT_COMPAT_Z_MAPPED_PARTITION := zephyr,mapped-partition
+
+config FLASH_USES_MAPPED_PARTITION
+	bool
+	default $(dt_node_has_compat,$(dt_chosen_path,$(DT_CHOSEN_Z_CODE_PARTITION)),$(DT_COMPAT_Z_MAPPED_PARTITION))
+	depends on USE_DT_CODE_PARTITION
+	help
+	  Temporary Kconfig to indicate if underlying chosen chosen flash partition uses the
+	  zephyr,mapped-partition compatible, this is to allow ease of migration from
+	  fixed-partitions and should not be relied upon outside of the zephyr build system and
+	  will be removed in future.
+
+config FLASH_CODE_PARTITION_USING_FIXED_PARTITIONS
+	bool
+	default y if XIP && \
+		$(dt_chosen_has_compat,$(dt_node_parent,$(dt_chosen_path,$(DT_CHOSEN_Z_CODE_PARTITION))),fixed-partitions) || \
+		$(dt_chosen_has_compat,$(dt_node_parent,$(dt_chosen_path,$(DT_CHOSEN_Z_CODE_PARTITION))),fixed-subpartitions)
+	depends on USE_DT_CODE_PARTITION
+	help
+	  If this item is selected then it is because your device is using ``fixed-partitions`` or
+	  ``fixed-subpartitions`` for partition layout, this has been replaced with
+	  ``zephyr,mapped-partitions``.
+
+	  Support for this will be deprecated and requires that your files be updated correctly for
+	  a future release, check the Zephyr 4.4 migration notes.
 
 config FLASH_LOAD_OFFSET
 	# Only user-configurable when USE_DT_CODE_PARTITION is disabled
@@ -482,7 +508,7 @@ choice COMPILER_OPTIMIZATIONS
 	prompt "Optimization level"
 	default NO_OPTIMIZATIONS    if COVERAGE
 	default DEBUG_OPTIMIZATIONS if DEBUG
-	default SIZE_OPTIMIZATIONS_AGGRESSIVE if "$(ZEPHYR_TOOLCHAIN_VARIANT)" = "llvm"
+	default SIZE_OPTIMIZATIONS_AGGRESSIVE if "$(TOOLCHAIN_VARIANT_COMPILER)" = "llvm"
 	default SIZE_OPTIMIZATIONS
 	help
 	  Note that these flags shall only control the compiler
@@ -628,6 +654,51 @@ config TOOLCHAIN_SUPPORTS_VLA_IN_STATEMENTS
 	help
 	  Hidden symbol to state if the toolchain can handle vla in
 	  statements.
+
+config TOOLCHAIN_SUPPORTS_VARIABLE_CLEANUP_ATTRIBUTE
+	bool
+	default y
+	help
+	  Hidden option to signal that toolchain supports the variable
+	  __cleanup(function) attribute.
+
+config SCOPE_CLEANUP_HELPERS
+	bool "Scope-based Cleanup Helpers"
+	depends on TOOLCHAIN_SUPPORTS_VARIABLE_CLEANUP_ATTRIBUTE
+	help
+	  This option enables scope-based cleanup helpers, which are macros making
+	  use of the variable cleanup function attribute.
+
+menu "Code Generation"
+
+choice COMPILER_CODEGEN_VLIW
+	prompt "VLIW (Very Long Instruction Word)"
+	default COMPILER_CODEGEN_VLIW_AUTO
+	help
+	  This option instructs the compiler whether to use VLIW
+	  (Very Long Instruction Word) instructions. VLIW allows
+	  the compiler to fuse instructions for parallel execution.
+
+config COMPILER_CODEGEN_VLIW_AUTO
+	bool "Auto"
+	help
+	  Let the compiler decide whether to generate VLIW instructions.
+
+	  This usually means using the compiler defaults.
+
+config COMPILER_CODEGEN_VLIW_ENABLED
+	bool "Generate VLIW"
+	help
+	  Explicitly instructs the compiler to generate VLIW instructions if possible.
+
+config COMPILER_CODEGEN_VLIW_DISABLED
+	bool "DO NOT generate VLIW"
+	help
+	  Explicitly instructs the compiler to NEVER generate VLIW instructions.
+
+endchoice # COMPILER_CODEGEN_VLIW
+
+endmenu # Code Generation
 
 endmenu
 
@@ -1021,7 +1092,8 @@ config WARN_DEPRECATED
 	prompt "Warn on deprecated usage"
 	help
 	  Print a warning when the Kconfig tree is parsed if any deprecated
-	  features are enabled.
+	  features are enabled, or at compile time, when deprecated macros or
+	  symbols are used.
 
 config EXPERIMENTAL
 	bool

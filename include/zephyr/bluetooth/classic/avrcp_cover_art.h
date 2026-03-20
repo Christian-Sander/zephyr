@@ -3,7 +3,7 @@
  */
 
 /*
- * Copyright 2025 NXP
+ * Copyright 2025-2026 NXP
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -14,7 +14,7 @@
 /**
  * @brief Audio Video Remote Control Cover Art Profile (AVRCP-CA)
  * @defgroup bt_avrcp_cover_art Audio Video Remote Control Cover Art Profile
- * @ingroup bluetooth
+ * @ingroup bt_avrcp
  * @{
  */
 
@@ -29,9 +29,15 @@
 extern "C" {
 #endif
 
-/** @brief AVRCP CT structure */
+/**
+ * @struct bt_avrcp_ct
+ * @brief AVRCP CT structure
+ */
 struct bt_avrcp_ct;
-/** @brief AVRCP TG structure */
+/**
+ * @struct bt_avrcp_tg
+ * @brief AVRCP TG structure
+ */
 struct bt_avrcp_tg;
 
 /**

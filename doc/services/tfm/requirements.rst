@@ -22,7 +22,7 @@ The following are some of the boards that can be used with TF-M:
      - ``bl5340_dvk/nrf5340/cpuapp/ns``
    * - :zephyr:board:`lpcxpresso55s69`
      - ``lpcxpresso55s69_ns``
-   * - :ref:`nrf9160dk_nrf9160`
+   * - :zephyr:board:`nrf9160dk_nrf9160 <nrf9160dk>`
      - ``nrf9160dk/nrf9160/ns``
    * - :zephyr:board:`nrf5340dk`
      - ``nrf5340dk/nrf5340/cpuapp/ns``
@@ -32,9 +32,9 @@ The following are some of the boards that can be used with TF-M:
      - ``nucleo_l552ze_q/stm32l552xx/ns``
    * - :zephyr:board:`stm32l562e_dk`
      - ``stm32l562e_dk/stm32l562xx/ns``
-   * - :ref:`v2m_musca_b1_board`
+   * - :zephyr:board:`v2m_musca_b1`
      - ``v2m_musca_b1/musca_b1/ns``
-   * - :ref:`v2m_musca_s1_board`
+   * - :zephyr:board:`v2m_musca_s1`
      - ``v2m_musca_s1/musca_s1/ns``
 
 To make sure TF-M is supported for a board

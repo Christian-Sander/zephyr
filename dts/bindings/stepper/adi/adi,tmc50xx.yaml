@@ -4,53 +4,6 @@
 description: |
   Analog Devices TMC50XX Stepper Motor Controller
 
-  Example:
-
-    &spi0 {
-        /* SPI bus options here, not shown */
-
-        /* Dual controller/driver for up to two 2-phase bipolar stepper motors */
-        tmc50xx: tmc50xx@0 {
-            compatible = "adi,tmc50xx";
-            reg = <0>;
-            spi-max-frequency = <DT_FREQ_M(8)>; /* Maximum SPI bus frequency */
-
-            poscmp-enable; test-mode; lock-gconf; /* ADI TMC Global configuration flags */
-            clock-frequency = <DT_FREQ_M(16)>; /* Internal/External Clock frequency */
-
-            tmc50xx_0_stepper_driver: tmc50xx_0_stepper_driver {
-              idx = <0>;
-              compatible = "adi,tmc50xx-stepper-drv";
-              micro-step-res = <256>;
-              /* ADI TMC stallguard settings specific to TMC50XX */
-              stallguard2-threshold=<30>;
-            };
-
-            tmc50xx_0_motion_controller: tmc50xx_0_motion_controller {
-              idx = <0>;
-              compatible = "adi,tmc50xx-stepper";
-              vstart = <1000>;
-              vstop = <10>;
-              a1 = <10000>;
-              v1 = <50000>;
-              d1 = <14000>;
-              vmax = <900000>;
-              amax = <50000>;
-              dmax = <7000>;
-              tzerowait = <100>;
-              vhigh = <900000>;
-              vcoolthrs = <900000>;
-              ihold = <1>;
-              irun = <10>;
-              iholddelay = <1>;
-              activate-stallguard2;
-              stallguard-velocity-check-interval-ms=<1000>;
-              stallguard-threshold-velocity=<200000>;
-            };
-        };
-    };
-
-
 compatible: "adi,tmc50xx"
 
 include:
@@ -87,3 +40,49 @@ child-binding:
     - name: base.yaml
       property-allowlist:
         - reg
+
+examples:
+  - |
+    &spi0 {
+        /* SPI bus options here, not shown */
+
+        /* Dual controller/driver for up to two 2-phase bipolar stepper motors */
+        tmc50xx: tmc50xx@0 {
+            compatible = "adi,tmc50xx";
+            reg = <0>;
+            spi-max-frequency = <DT_FREQ_M(8)>; /* Maximum SPI bus frequency */
+
+            poscmp-enable; test-mode; lock-gconf; /* ADI TMC Global configuration flags */
+            clock-frequency = <DT_FREQ_M(16)>; /* Internal/External Clock frequency */
+
+            tmc50xx_0_stepper_driver: stepper-driver-0 {
+              idx = <0>;
+              compatible = "adi,tmc50xx-stepper-driver";
+              micro-step-res = <256>;
+              /* ADI TMC stallguard settings specific to TMC50XX */
+              stallguard2-threshold=<30>;
+            };
+
+            tmc50xx_0_motion_controller: motion-controller-0 {
+              idx = <0>;
+              compatible = "adi,tmc50xx-stepper-ctrl";
+              vstart = <1000>;
+              vstop = <10>;
+              a1 = <10000>;
+              v1 = <50000>;
+              d1 = <14000>;
+              vmax = <900000>;
+              amax = <50000>;
+              dmax = <7000>;
+              tzerowait = <100>;
+              vhigh = <900000>;
+              vcoolthrs = <900000>;
+              ihold = <1>;
+              irun = <10>;
+              iholddelay = <1>;
+              activate-stallguard2;
+              stallguard-velocity-check-interval-ms=<1000>;
+              stallguard-threshold-velocity=<200000>;
+            };
+        };
+    };

@@ -19,7 +19,12 @@ supported:
   - uart
   - dma
   - i2c
-  - display
   - spi
   - flash
+  - input
+  - pwm
+  - adc
+  - entropy
+  - crypto
+  - counter
 vendor: bflb

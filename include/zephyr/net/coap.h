@@ -138,10 +138,10 @@ enum coap_msgtype {
  * @brief Set of response codes available for a response packet.
  *
  * To be used when creating a response.
+ *
+ * Refer to RFC 7252, section 12.1.2 for more information.
  */
 enum coap_response_code {
-	/** 2.00 - OK */
-	COAP_RESPONSE_CODE_OK = COAP_MAKE_RESPONSE_CODE(2, 0),
 	/** 2.01 - Created */
 	COAP_RESPONSE_CODE_CREATED = COAP_MAKE_RESPONSE_CODE(2, 1),
 	/** 2.02 - Deleted */
@@ -287,6 +287,8 @@ struct coap_resource {
 	const char * const *path;
 	/** User specific opaque data */
 	void *user_data;
+	/** Resource metadata for '.well-known/core' responses */
+	struct coap_core_metadata *metadata;
 	/** List of resource observers */
 	sys_slist_t observers;
 	/** Resource age */
@@ -300,7 +302,7 @@ struct coap_observer {
 	/** Observer list node */
 	sys_snode_t list;
 	/** Observer connection end point information */
-	struct net_sockaddr addr;
+	struct net_sockaddr_storage addr;
 	/** Observer token */
 	uint8_t token[8];
 	/** Extended token length */

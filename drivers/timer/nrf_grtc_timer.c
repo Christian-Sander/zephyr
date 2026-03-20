@@ -15,6 +15,7 @@
 #include <zephyr/drivers/timer/nrf_grtc_timer.h>
 #include <nrfx_grtc.h>
 #include <zephyr/sys/math_extras.h>
+#include <nrf_sys_event.h>
 
 #define GRTC_NODE DT_NODELABEL(grtc)
 #define HFCLK_NODE DT_PHANDLE_BY_NAME(GRTC_NODE, clocks, hfclock)
@@ -82,6 +83,10 @@ static nrfx_grtc_channel_t system_clock_channel_data = {
 	.p_context = NULL,
 	.channel = (uint8_t)-1,
 };
+#if defined(CONFIG_NRF_SYS_EVENT_GRTC_CHAN_CNT) && (CONFIG_NRF_SYS_EVENT_GRTC_CHAN_CNT > 0)
+#define USE_SYS_EVENT 1
+#endif
+static int sys_evt_handle = -1;
 
 #define IS_CHANNEL_ALLOWED_ASSERT(chan)                                                            \
 	__ASSERT_NO_MSG((NRFX_GRTC_CONFIG_ALLOWED_CC_CHANNELS_MASK & (1UL << (chan))) &&           \
@@ -142,12 +147,21 @@ static void compare_int_unlock(int32_t chan, bool key)
 	}
 }
 
+static void sys_event_unregister(bool canceled)
+{
+	if (IS_ENABLED(USE_SYS_EVENT) && (sys_evt_handle >= 0)) {
+		nrf_sys_event_unregister(sys_evt_handle, canceled);
+		sys_evt_handle = -1;
+	}
+}
+
 static void sys_clock_timeout_handler(int32_t id, uint64_t cc_val, void *p_context)
 {
 	ARG_UNUSED(id);
 	ARG_UNUSED(p_context);
 	uint32_t dticks;
 
+	sys_event_unregister(false);
 	dticks = counter_sub(cc_val, last_count) / CYC_PER_TICK;
 	last_count += (dticks * CYC_PER_TICK);
 	expired_cc = cc_val;
@@ -173,6 +187,23 @@ int32_t z_nrf_grtc_timer_chan_alloc(void)
 		return -ENOMEM;
 	}
 	err_code = nrfx_grtc_channel_alloc(&chan);
+	if (err_code < 0) {
+		return -ENOMEM;
+	}
+	ext_channels_allocated++;
+	return (int32_t)chan;
+}
+
+int32_t z_nrf_grtc_timer_ext_chan_alloc(void)
+{
+	uint8_t chan;
+	int err_code;
+
+	/* Prevent allocating all available channels - one must be left for system purposes. */
+	if (ext_channels_allocated >= EXT_CHAN_COUNT) {
+		return -ENOMEM;
+	}
+	err_code = nrfx_grtc_extended_channel_alloc(&chan);
 	if (err_code < 0) {
 		return -ENOMEM;
 	}
@@ -260,6 +291,49 @@ static int compare_set(int32_t chan, uint64_t target_time,
 	compare_int_unlock(chan, key);
 
 	return ret;
+}
+
+static void interval_set_nolocks(int32_t chan, uint32_t initial_val, uint32_t interval_value,
+				z_nrf_grtc_timer_compare_handler_t handler, void *user_data)
+{
+	nrfx_grtc_syscounter_cc_interval_set(chan, initial_val, interval_value);
+	if (handler) {
+		nrfx_grtc_channel_t user_channel_data = {
+			.handler = handler,
+			.p_context = user_data,
+			.channel = chan,
+		};
+		nrfx_grtc_channel_callback_set(chan, user_channel_data.handler,
+					user_channel_data.p_context);
+	}
+}
+
+static void interval_set(int32_t chan, uint32_t initial_val, uint32_t interval_value,
+				z_nrf_grtc_timer_compare_handler_t handler, void *user_data)
+{
+	bool key = compare_int_lock(chan);
+
+	interval_set_nolocks(chan, initial_val, interval_value, handler, user_data);
+
+	compare_int_unlock(chan, key);
+}
+
+int z_nrf_grtc_timer_interval_set(int32_t chan, uint32_t initial_value, uint32_t interval_value,
+				z_nrf_grtc_timer_compare_handler_t handler, void *user_data)
+{
+	if (NRFX_BIT((uint32_t)chan) && NRFX_GRTC_CONFIG_EXTENDED_CC_CHANNELS_MASK == 0) {
+		return -EPERM;
+	}
+
+	interval_set(chan, initial_value, interval_value,
+			(nrfx_grtc_cc_handler_t)handler, user_data);
+
+	return 0;
+}
+
+void z_nrf_grtc_timer_interval_stop(int32_t chan)
+{
+	nrfx_grtc_syscounter_cc_interval_reset(chan);
 }
 
 int z_nrf_grtc_timer_set(int32_t chan, uint64_t target_time,
@@ -560,8 +634,10 @@ void sys_clock_set_timeout(int32_t ticks, bool idle)
 		return;
 	}
 
+	bool sys_evt = ticks <= 30;
 	uint32_t ch = system_clock_channel_data.channel;
 
+	sys_event_unregister(true);
 	if ((cc_value == expired_cc) && (ticks <= MAX_REL_TICKS)) {
 		uint32_t cyc = ticks * CYC_PER_TICK;
 
@@ -578,6 +654,9 @@ void sys_clock_set_timeout(int32_t ticks, bool idle)
 		 * is short so fast method can be used which utilizes relative CC configuration.
 		 */
 		cc_value += cyc;
+		if (IS_ENABLED(USE_SYS_EVENT)) {
+			sys_evt_handle = sys_evt ? nrf_sys_event_register(cyc, false) : -1;
+		}
 		nrfx_grtc_syscounter_cc_rel_set(ch, cyc, NRFX_GRTC_CC_RELATIVE_COMPARE);
 		return;
 	}
@@ -600,6 +679,9 @@ void sys_clock_set_timeout(int32_t ticks, bool idle)
 		safe_setting = (int64_t)(prev_cc_val - now) < LATENCY_THR_TICKS;
 	}
 
+	if (IS_ENABLED(USE_SYS_EVENT)) {
+		sys_evt_handle = sys_evt ? nrf_sys_event_abs_register(cc_value, false) : -1;
+	}
 	nrfx_grtc_syscounter_cc_abs_set(ch, cc_value, safe_setting);
 }
 
@@ -609,6 +691,7 @@ int nrf_grtc_timer_clock_driver_init(void)
 	return sys_clock_driver_init();
 }
 #else
-SYS_INIT(sys_clock_driver_init, EARLY, CONFIG_SYSTEM_CLOCK_INIT_PRIORITY);
+/* Init must follow soc init and precede LOG_CORE_INIT() */
+SYS_INIT(sys_clock_driver_init, EARLY, 1);
 SYS_INIT(grtc_post_init, PRE_KERNEL_2, CONFIG_SYSTEM_CLOCK_INIT_PRIORITY);
 #endif

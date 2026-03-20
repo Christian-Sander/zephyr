@@ -28,12 +28,13 @@ spi1: &scb10 {
 		reg = <0>;
 		spi-max-frequency = <3000000>;
 	};
+
+	dmas = <&dma0 0>, <&dma0 1>;
+	dma-names = "tx", "rx";
 };
 
 &peri0_group1_16bit_2 {
 	status = "okay";
-	resource-type = <IFX_RSC_SCB>;
-	resource-instance = <10>;
 };
 
 &p16_1_scb10_spi_m_mosi {
@@ -49,4 +50,8 @@ spi1: &scb10 {
 &p16_0_scb10_spi_m_clk {
 	drive-strength = "full";
 	drive-push-pull;
+};
+
+&dma0 {
+	status = "okay";
 };

@@ -11,9 +11,13 @@ LOG_MODULE_REGISTER(net_eth_bridge, CONFIG_NET_ETHERNET_BRIDGE_LOG_LEVEL);
 
 #include <zephyr/net/net_core.h>
 #include <zephyr/net/net_l2.h>
+#include <zephyr/net/net_log.h>
 #include <zephyr/net/net_if.h>
 #include <zephyr/net/virtual.h>
 #include <zephyr/net/ethernet_bridge.h>
+#if defined(CONFIG_NET_ETHERNET_BRIDGE_FDB)
+#include <zephyr/net/ethernet_bridge_fdb.h>
+#endif
 #include <zephyr/sys/slist.h>
 #include <zephyr/random/random.h>
 
@@ -198,6 +202,11 @@ int eth_bridge_iface_remove(struct net_if *br, struct net_if *iface)
 		return -EINVAL;
 	}
 
+#if defined(CONFIG_NET_ETHERNET_BRIDGE_FDB)
+	if (eth_bridge_fdb_del_iface(iface) != 0) {
+		return -EINVAL;
+	}
+#endif
 	lock_bridge(ctx);
 
 	ARRAY_FOR_EACH(ctx->eth_iface, i) {
@@ -238,6 +247,9 @@ int eth_bridge_iface_remove(struct net_if *br, struct net_if *iface)
 static void random_linkaddr(uint8_t *linkaddr, size_t len)
 {
 	sys_rand_get(linkaddr, len);
+
+	linkaddr[0] |= 0x02;  /* force LAA bit */
+	linkaddr[0] &= ~0x01; /* clear multicast bit */
 }
 
 static void bridge_iface_init(struct net_if *iface)

@@ -45,15 +45,17 @@
 			light_sleep: light_sleep {
 				compatible = "zephyr,power-state";
 				power-state-name = "standby";
-				min-residency-us = <200>;
-				exit-latency-us = <60>;
+				min-residency-us = <1000>;
+				exit-latency-us = <50>;
 			};
 
 			deep_sleep: deep_sleep {
+				/* Deep sleep must be entered using pm_state_force()
+				 * or sys_poweroff() calls only
+				 */
 				compatible = "zephyr,power-state";
 				power-state-name = "soft-off";
-				min-residency-us = <2000>;
-				exit-latency-us = <212>;
+				status = "disabled";
 			};
 		};
 	};
@@ -105,9 +107,9 @@
 			zephyr,memory-region = "DCACHE0";
 		};
 
-		dcache1: dcache1@3f500000 {
+		dcache1: dcache1@3f800000 {
 			compatible = "zephyr,memory-region";
-			reg = <0x3f500000 DT_SIZE_K(10752)>;
+			reg = <0x3f800000 DT_SIZE_M(4)>;
 			zephyr,memory-region = "DCACHE1";
 
 			psram0: psram0 {
@@ -153,7 +155,7 @@
 		};
 
 		rtc_timer: rtc_timer@3f408004 {
-			reg = <0x3f408004 0xC>;
+			reg = <0x3f408004 0xc>;
 			compatible = "espressif,esp32-rtc-timer";
 			clocks = <&clock ESP32_MODULE_MAX>;
 			interrupts = <RTC_CORE_INTR_SOURCE IRQ_DEFAULT_PRIORITY 0>;

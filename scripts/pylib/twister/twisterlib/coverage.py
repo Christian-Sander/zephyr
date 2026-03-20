@@ -79,8 +79,11 @@ class CoverageTool:
                         continue
                 else:
                     continue
-                hex_bytes = bytes.fromhex(hex_dump)
-                extracted_coverage_info[file_name].append(hex_bytes)
+                try:
+                    hex_bytes = bytes.fromhex(hex_dump)
+                    extracted_coverage_info[file_name].append(hex_bytes)
+                except ValueError:
+                    logger.exception(f"Unable to convert hex data for file: {file_name}")
         if not capture_data:
             capture_complete = True
         return {'complete': capture_complete, 'data': extracted_coverage_info}
@@ -126,9 +129,6 @@ class CoverageTool:
                 hexdump_val = self.merge_hexdumps(hexdumps)
                 with open(filename, 'wb') as fp:
                     fp.write(hexdump_val)
-            except ValueError:
-                logger.exception(f"Unable to convert hex data for file: {filename}")
-                gcda_created = False
             except FileNotFoundError:
                 logger.exception(f"Unable to create gcda file: {filename}")
                 gcda_created = False
@@ -562,8 +562,8 @@ def choose_gcov_tool(options, is_system_gcov):
     if not options.gcov_tool:
         zephyr_sdk_gcov_tool = os.path.join(
             os.environ.get("ZEPHYR_SDK_INSTALL_DIR", default=""),
-            "x86_64-zephyr-elf/bin/x86_64-zephyr-elf-gcov")
-        if os.environ.get("ZEPHYR_TOOLCHAIN_VARIANT") == "llvm":
+            "gnu/x86_64-zephyr-elf/bin/x86_64-zephyr-elf-gcov")
+        if os.environ.get("ZEPHYR_TOOLCHAIN_VARIANT").endswith("/llvm"):
             llvm_path = os.environ.get("LLVM_TOOLCHAIN_PATH")
             if llvm_path is not None:
                 llvm_path = os.path.join(llvm_path, "bin")

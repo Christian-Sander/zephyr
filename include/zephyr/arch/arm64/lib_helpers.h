@@ -12,6 +12,8 @@
 #include <zephyr/arch/arm64/cpu.h>
 #include <stdint.h>
 
+/** @cond INTERNAL_HIDDEN */
+
 /* All the macros need a memory clobber */
 
 #define read_sysreg(reg)						\
@@ -62,6 +64,8 @@ MAKE_REG_HELPER(cnthp_ctl_el2);
 MAKE_REG_HELPER(cnthps_ctl_el2);
 MAKE_REG_HELPER(cntv_ctl_el0)
 MAKE_REG_HELPER(cntv_cval_el0)
+MAKE_REG_HELPER(cntp_cval_el0)
+MAKE_REG_HELPER(cntps_cval_el1)
 MAKE_REG_HELPER(cntvct_el0);
 MAKE_REG_HELPER(cntvoff_el2);
 MAKE_REG_HELPER(currentel);
@@ -208,6 +212,22 @@ static inline bool is_sve_implemented(void)
 {
 	return (((read_id_aa64pfr0_el1() >> ID_AA64PFR0_SVE_SHIFT) & ID_AA64PFR0_SVE_MASK) != 0U);
 }
+
+#ifdef CONFIG_ARM_PAC
+/* PAC Key Register Helpers */
+MAKE_REG_HELPER(apiakeylo_el1);
+MAKE_REG_HELPER(apiakeyhi_el1);
+MAKE_REG_HELPER(apibkeylo_el1);
+MAKE_REG_HELPER(apibkeyhi_el1);
+MAKE_REG_HELPER(apdakeylo_el1);
+MAKE_REG_HELPER(apdakeyhi_el1);
+MAKE_REG_HELPER(apdbkeylo_el1);
+MAKE_REG_HELPER(apdbkeyhi_el1);
+MAKE_REG_HELPER(apgakeylo_el1);
+MAKE_REG_HELPER(apgakeyhi_el1);
+#endif /* CONFIG_ARM_PAC */
+
+/** @endcond */
 
 #endif /* !_ASMLANGUAGE */
 

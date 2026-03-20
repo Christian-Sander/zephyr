@@ -4,17 +4,17 @@
  */
 
 #include <stepper_timing_source.h>
-#include "gpio_stepper_common.h"
+#include <gpio_stepper_common.h>
 
 static k_timeout_t stepper_movement_delay(const struct device *dev)
 {
 	const struct gpio_stepper_common_data *data = dev->data;
 
-	if (data->microstep_interval_ns == 0) {
+	if (data->timing_source_interval_ns == 0) {
 		return K_FOREVER;
 	}
 
-	return K_NSEC(data->microstep_interval_ns);
+	return K_NSEC(data->timing_source_interval_ns);
 }
 
 static void stepper_work_step_handler(struct k_work *work)
@@ -22,9 +22,10 @@ static void stepper_work_step_handler(struct k_work *work)
 	struct k_work_delayable *dwork = k_work_delayable_from_work(work);
 	struct gpio_stepper_common_data *data =
 		CONTAINER_OF(dwork, struct gpio_stepper_common_data, stepper_dwork);
-	const struct gpio_stepper_common_config *config = data->dev->config;
+	const struct device *ctrl_dev = gpio_stepper_common_get_stepper_ctrl_dev(data);
+	const struct gpio_stepper_common_config *config = ctrl_dev->config;
 
-	config->timing_source_cb(data->dev);
+	config->timing_source_cb(ctrl_dev);
 }
 
 int step_work_timing_source_init(const struct device *dev)
@@ -38,8 +39,17 @@ int step_work_timing_source_init(const struct device *dev)
 
 int step_work_timing_source_update(const struct device *dev, const uint64_t microstep_interval_ns)
 {
-	ARG_UNUSED(dev);
-	ARG_UNUSED(microstep_interval_ns);
+	struct gpio_stepper_common_data *data = dev->data;
+
+	if (microstep_interval_ns == 0) {
+		return -EINVAL;
+	}
+
+	/*
+	 * The timing source interval is not necessarily the same as the configured microstep
+	 * interval (e.g. single-edge mode uses half-period ticks).
+	 */
+	data->timing_source_interval_ns = microstep_interval_ns;
 	return 0;
 }
 

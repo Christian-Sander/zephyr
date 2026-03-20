@@ -839,7 +839,7 @@ static void server_resource_1_callback(struct coap_resource *resource,
 {
 	bool r;
 
-	r = ipaddr_cmp(&observer->addr, (const struct net_sockaddr *)&dummy_addr);
+	r = ipaddr_cmp(net_sad(&observer->addr), (struct net_sockaddr *)&dummy_addr);
 	zassert_true(r, "The address of the observer doesn't match");
 
 	coap_remove_observer(resource, observer);
@@ -849,7 +849,7 @@ static void server_resource_2_callback(struct coap_resource *resource,
 {
 	bool r;
 
-	r = ipaddr_cmp(&observer->addr, (const struct net_sockaddr *)&dummy_addr);
+	r = ipaddr_cmp(net_sad(&observer->addr), (const struct net_sockaddr *)&dummy_addr);
 	zassert_true(r, "The address of the observer doesn't match");
 }
 
@@ -880,7 +880,7 @@ static int server_resource_1_get(struct coap_resource *resource,
 
 	r = coap_packet_init(&response, data, COAP_BUF_SIZE,
 			     COAP_VERSION_1, COAP_TYPE_ACK, tkl, token,
-			     COAP_RESPONSE_CODE_OK, id);
+			     COAP_RESPONSE_CODE_CONTENT, id);
 	zassert_equal(r, 0, "Unable to initialize packet");
 
 	r = coap_append_option_int(&response, COAP_OPTION_OBSERVE,

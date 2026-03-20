@@ -13,6 +13,7 @@ LOG_MODULE_DECLARE(net_zperf, CONFIG_NET_ZPERF_LOG_LEVEL);
 #include <zephyr/kernel.h>
 
 #include <zephyr/net/mld.h>
+#include <zephyr/net/net_log.h>
 #include <zephyr/net/socket.h>
 #include <zephyr/net/socket_service.h>
 #include <zephyr/net/zperf.h>
@@ -327,10 +328,10 @@ static int udp_recv_data(struct net_socket_service_event *pev)
 
 	if ((pev->event.revents & ZSOCK_POLLERR) ||
 	    (pev->event.revents & ZSOCK_POLLNVAL)) {
-		(void)zsock_getsockopt(pev->event.fd, SOL_SOCKET,
-				       SO_DOMAIN, &family, &optlen);
-		(void)zsock_getsockopt(pev->event.fd, SOL_SOCKET,
-				       SO_ERROR, &sock_error, &optlen);
+		(void)zsock_getsockopt(pev->event.fd, ZSOCK_SOL_SOCKET,
+				       ZSOCK_SO_DOMAIN, &family, &optlen);
+		(void)zsock_getsockopt(pev->event.fd, ZSOCK_SOL_SOCKET,
+				       ZSOCK_SO_ERROR, &sock_error, &optlen);
 		NET_ERR("UDP receiver IPv%d socket error (%d)",
 			family == NET_AF_INET ? 4 : 6, sock_error);
 		ret = -sock_error;
@@ -351,8 +352,8 @@ static int udp_recv_data(struct net_socket_service_event *pev)
 
 		if (ret < 0) {
 			ret = -errno;
-			(void)zsock_getsockopt(pev->event.fd, SOL_SOCKET,
-					       SO_DOMAIN, &family, &optlen);
+			(void)zsock_getsockopt(pev->event.fd, ZSOCK_SOL_SOCKET,
+					       ZSOCK_SO_DOMAIN, &family, &optlen);
 			NET_ERR("recv failed on IPv%d socket (%d)",
 				family == NET_AF_INET ? 4 : 6, -ret);
 			goto error;

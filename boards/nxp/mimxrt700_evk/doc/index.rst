@@ -24,12 +24,16 @@ Hardware
 ********
 
 - Main Compute Subsystem:
-   - Arm Cortex-M33 up to 325 MHz
-   - HiFi 4 DSP up to 325 MHz
-   - eIQ Neutron NPU up to 325 MHz
-- Sense Compute Subsystem:
-   - Arm Cortex-M33 up to 250 MHz
-   - HiFi 1 DSP up to 250 MHz
+
+  - Arm Cortex-M33 up to 325 MHz
+  - HiFi 4 DSP up to 325 MHz
+  - eIQ Neutron NPU up to 325 MHz
+
+- Sense Compute Subsystem
+
+  - Arm Cortex-M33 up to 250 MHz
+  - HiFi 1 DSP up to 250 MHz
+
 - 7.5 MB on-chip SRAM
 - Three xSPI interfaces for off-chip memory expansion, supporting up to 16b wide external memories up to 250 MHz DDR
 - eUSB support with integrated PHY
@@ -248,7 +252,7 @@ directly, but some modifications are required (see
 for a list). The display sample can be built for this module like so:
 
 .. zephyr-app-commands::
-   :board: mimxrt700_evk
+   :board: mimxrt700_evk/mimxrt798s/cm33_cpu0
    :shield: g1120b0mipi
    :zephyr-app: samples/drivers/display
    :goals: build
@@ -265,7 +269,7 @@ region must be used, which needs to connect JP45 1-2. The display sample can be 
 module like so:
 
 .. zephyr-app-commands::
-   :board: mimxrt700_evk
+   :board: mimxrt700_evk/mimxrt798s/cm33_cpu0
    :shield: rk055hdmipi4ma0
    :zephyr-app: samples/drivers/display
    :goals: build
@@ -280,7 +284,7 @@ directly, but some modifications are required (see
 for a list). The display sample can be built for this module like so:
 
 .. zephyr-app-commands::
-   :board: mimxrt700_evk
+   :board: mimxrt700_evk/mimxrt798s/cm33_cpu0
    :shield: zc143ac72mipi
    :zephyr-app: samples/drivers/display
    :goals: build

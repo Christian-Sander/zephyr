@@ -10,10 +10,12 @@ The Wi-Fi management API is used to manage Wi-Fi networks. It supports below mod
 
 * IEEE802.11 Station (STA)
 * IEEE802.11 Access Point (AP)
+* IEEE802.11 P2P (Wi-Fi Direct)
 
 Only personal mode security is supported with below types:
 
 * Open
+* WEP
 * WPA2-PSK
 * WPA2-PSK-256
 * WPA3-SAE
@@ -44,6 +46,18 @@ Wi-Fi PSA crypto supported build
 ********************************
 
 To enable PSA crypto API supported Wi-Fi build, the :kconfig:option:`CONFIG_WIFI_NM_WPA_SUPPLICANT_CRYPTO_ALT` and the :kconfig:option:`CONFIG_WIFI_NM_WPA_SUPPLICANT_CRYPTO_MBEDTLS_PSA` need to be set.
+
+Wi-Fi feature to crypto mapping
+*******************************
+
+For a mapping of Wi-Fi features (WPA3-SAE, DPP, SAE-PK, WPA2-PSK, Enterprise EAP, etc.) to
+crypto primitives (bignum, ECDH, TLS, hashes, AES) and which use **Legacy crypto** vs **PSA
+crypto**, see the dedicated sub-page:
+
+.. toctree::
+   :maxdepth: 1
+
+   wifi_crypto
 
 Wi-Fi Enterprise test: X.509 Certificate management
 ***************************************************
@@ -214,6 +228,19 @@ The test certificates in ``samples/net/wifi/test_certs/rsa2k`` are generated usi
 
 .. note::
    These certificates are for testing only and should not be used in production.
+
+Wi-Fi P2P (Wi-Fi Direct)
+************************
+
+Wi-Fi P2P or Wi-Fi Direct enables devices to communicate directly with each other without requiring
+a traditional access point. This feature is particularly useful for device-to-device communication
+scenarios.
+
+To enable and build with Wi-Fi P2P support:
+
+.. code-block:: bash
+
+    $ west build -p -b <board> samples/net/wifi/shell -- -DCONFIG_WIFI_NM_WPA_SUPPLICANT_P2P=y
 
 API Reference
 *************

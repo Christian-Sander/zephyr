@@ -27,11 +27,7 @@
 #include "common/bt_shell_private.h"
 
 #define HELP_NONE "[none]"
-#ifdef CONFIG_ZTEST
-#define STATIC
-#else
-#define STATIC static
-#endif
+
 extern struct bt_conn *default_conn;
 
 #if defined(CONFIG_BT_HFP_HF)
@@ -208,7 +204,7 @@ void hf_dialing(struct bt_hfp_hf *hf, int err)
 }
 
 #if defined(CONFIG_BT_HFP_HF_CLI)
-void hf_clip(struct bt_hfp_hf_call *call, char *number, uint8_t type)
+void hf_clip(struct bt_hfp_hf_call *call, const char *number, uint8_t type)
 {
 	bt_shell_print("HF call %p CLIP %s %d", call, number, type);
 }
@@ -231,7 +227,7 @@ static void hf_inband_ring(struct bt_hfp_hf *hf, bool inband)
 	bt_shell_print("HF ring: %s", inband ? "in-band" : "no in-hand");
 }
 
-static void hf_operator(struct bt_hfp_hf *hf, uint8_t mode, uint8_t format, char *operator)
+static void hf_operator(struct bt_hfp_hf *hf, uint8_t mode, uint8_t format, const char *operator)
 {
 	bt_shell_print("HF mode %d, format %d, operator %s", mode, format, operator);
 }
@@ -261,7 +257,7 @@ static void hf_ecnr_turn_off(struct bt_hfp_hf *hf, int err)
 #endif /* CONFIG_BT_HFP_HF_ECNR */
 
 #if defined(CONFIG_BT_HFP_HF_3WAY_CALL)
-static void hf_call_waiting(struct bt_hfp_hf_call *call, char *number, uint8_t type)
+static void hf_call_waiting(struct bt_hfp_hf_call *call, const char *number, uint8_t type)
 {
 	bt_shell_print("3way call %p waiting. number %s type %d", call, number, type);
 }
@@ -282,7 +278,7 @@ void hf_vre_state(struct bt_hfp_hf *hf, uint8_t state)
 
 #if defined(CONFIG_BT_HFP_HF_VOICE_RECG_TEXT)
 void hf_textual_representation(struct bt_hfp_hf *hf, char *id, uint8_t type, uint8_t operation,
-			       char *text)
+			       const char *text)
 {
 	bt_shell_print("Text id %s, type %d, operation %d, string %s", id, type, operation, text);
 }
@@ -316,7 +312,7 @@ void hf_query_call(struct bt_hfp_hf *hf, struct bt_hfp_hf_current_call *call)
 }
 #endif /* CONFIG_BT_HFP_HF_ECS */
 
-STATIC struct bt_hfp_hf_cb hf_cb = {
+ZTESTABLE_STATIC struct bt_hfp_hf_cb hf_cb = {
 	.connected = hf_connected,
 	.disconnected = hf_disconnected,
 	.sco_connected = hf_sco_connected,
@@ -1403,7 +1399,7 @@ void ag_hf_indicator_value(struct bt_hfp_ag *ag, enum hfp_ag_hf_indicators indic
 	bt_shell_print("indicator %d value %d", indicator, value);
 }
 
-STATIC struct bt_hfp_ag_cb ag_cb = {
+ZTESTABLE_STATIC struct bt_hfp_ag_cb ag_cb = {
 	.connected = ag_connected,
 	.disconnected = ag_disconnected,
 	.sco_connected = ag_sco_connected,

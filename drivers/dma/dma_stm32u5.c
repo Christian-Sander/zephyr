@@ -170,18 +170,6 @@ bool stm32_dma_is_ht_irq_active(DMA_TypeDef *dma, uint32_t id)
 		LL_DMA_IsActiveFlag_HT(dma, dma_stm32_id_to_stream(id)));
 }
 
-static inline bool stm32_dma_is_te_irq_active(DMA_TypeDef *dma, uint32_t id)
-{
-	return (
-		(LL_DMA_IsEnabledIT_DTE(dma, dma_stm32_id_to_stream(id)) &&
-		LL_DMA_IsActiveFlag_DTE(dma, dma_stm32_id_to_stream(id))) ||
-		(LL_DMA_IsEnabledIT_ULE(dma, dma_stm32_id_to_stream(id)) &&
-		LL_DMA_IsActiveFlag_ULE(dma, dma_stm32_id_to_stream(id))) ||
-		(LL_DMA_IsEnabledIT_USE(dma, dma_stm32_id_to_stream(id)) &&
-		LL_DMA_IsActiveFlag_USE(dma, dma_stm32_id_to_stream(id)))
-		);
-}
-
 /* check if and irq of any type occurred on the channel */
 #define stm32_dma_is_irq_active LL_DMA_IsActiveFlag_MIS
 
@@ -253,6 +241,7 @@ static void dma_stm32_irq_handler(const struct device *dev, uint32_t id)
 	DMA_TypeDef *dma = (DMA_TypeDef *)(config->base);
 	struct dma_stm32_stream *stream;
 	uint32_t callback_arg;
+	int status;
 
 	__ASSERT_NO_MSG(id < config->max_streams);
 
@@ -274,7 +263,7 @@ static void dma_stm32_irq_handler(const struct device *dev, uint32_t id)
 		if (!stream->hal_override) {
 			dma_stm32_clear_ht(dma, id);
 		}
-		stream->dma_callback(dev, stream->user_data, callback_arg, DMA_STATUS_BLOCK);
+		status = DMA_STATUS_BLOCK;
 	} else if (stm32_dma_is_tc_irq_active(dma, id)) {
 		/* Assuming not cyclic transfer */
 		if (stream->cyclic == false) {
@@ -284,14 +273,17 @@ static void dma_stm32_irq_handler(const struct device *dev, uint32_t id)
 		if (!stream->hal_override) {
 			dma_stm32_clear_tc(dma, id);
 		}
-		stream->dma_callback(dev, stream->user_data, callback_arg, DMA_STATUS_COMPLETE);
+		status = DMA_STATUS_COMPLETE;
 	} else {
 		LOG_ERR("Transfer Error.");
 		stream->busy = false;
 		dma_stm32_dump_stream_irq(dev, id);
 		dma_stm32_clear_stream_irq(dev, id);
-		stream->dma_callback(dev, stream->user_data,
-				     callback_arg, -EIO);
+		status = -EIO;
+	}
+
+	if (stream->dma_callback != NULL) {
+		stream->dma_callback(dev, stream->user_data, callback_arg, status);
 	}
 }
 
@@ -645,6 +637,7 @@ static int dma_stm32_suspend(const struct device *dev, uint32_t id)
 {
 	const struct dma_stm32_config *config = dev->config;
 	DMA_TypeDef *dma = (DMA_TypeDef *)(config->base);
+	const struct dma_stm32_stream *stream = &config->streams[id];
 
 	if (id >= config->max_streams) {
 		return -EINVAL;
@@ -655,7 +648,8 @@ static int dma_stm32_suspend(const struct device *dev, uint32_t id)
 	/* It's not enough to wait for the SUSPF bit with LL_DMA_IsActiveFlag_SUSP */
 	do {
 		k_busy_wait(800); /* A delay is needed (800us is valid) */
-	} while (LL_DMA_IsActiveFlag_SUSP(dma, dma_stm32_id_to_stream(id)) != 1);
+	} while (LL_DMA_IsActiveFlag_SUSP(dma, dma_stm32_id_to_stream(id)) != 1 &&
+			stream->busy == true);
 
 	/* Do not Reset the channel to allow resuming later */
 	return 0;

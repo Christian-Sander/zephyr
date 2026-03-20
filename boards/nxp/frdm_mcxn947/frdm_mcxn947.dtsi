@@ -278,9 +278,9 @@ arduino_serial: &flexcomm2_lpuart2 {};
 			reg = <0x00014000 DT_SIZE_K(984)>;
 		};
 
-		slot1_partition: partition@10A000 {
+		slot1_partition: partition@10a000 {
 			label = "image-1";
-			reg = <0x0010A000 DT_SIZE_K(984)>;
+			reg = <0x0010a000 DT_SIZE_K(984)>;
 		};
 		/* storage_partition is placed in WINBOND flash memory*/
 	};
@@ -384,11 +384,6 @@ zephyr_mipi_dbi_parallel: &flexio0_lcd {
 	pinctrl-names = "default";
 };
 
-&lpcmp0 {
-	pinctrl-0 = <&pinmux_lpcmp0>;
-	pinctrl-names = "default";
-};
-
 &opamp0 {
 	pinctrl-0 = <&pinmux_opamp0>;
 	pinctrl-names = "default";
@@ -407,6 +402,17 @@ zephyr_mipi_dbi_parallel: &flexio0_lcd {
 &sc_timer {
 	pinctrl-0 = <&pinmux_sctimer>;
 	pinctrl-names = "default";
+};
+
+&tsi0 {
+	pinctrl-0 = <&pinmux_tsi>;
+	pinctrl-names = "default";
+
+	channel-mask = <0x08>;
+	input-codes = <INPUT_BTN_3>;
+	touch-threshold = <60>;
+	release-threshold = <30>;
+	scan-period-ms = <50>;
 };
 
 dvp_20pin_i2c: &flexcomm7_lpi2c7 {};

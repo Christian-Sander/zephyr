@@ -43,12 +43,13 @@
 		};
 
 		cpuppr: cpu@d {
-			compatible = "nordic,vpr";
+			compatible = "nordic,vpr", "riscv";
 			reg = <13>;
 			device_type = "cpu";
 			clocks = <&fll16m>;
 			clock-frequency = <DT_FREQ_M(16)>;
-			riscv,isa = "rv32emc";
+			riscv,isa-base = "rv32e";
+			riscv,isa-extensions = "e", "m", "c", "zicsr";
 			nordic,bus-width = <32>;
 
 			cpuppr_vevif_rx: mailbox {
@@ -78,11 +79,12 @@
 		};
 
 		cpuflpr: cpu@e {
-			compatible = "nordic,vpr";
+			compatible = "nordic,vpr", "riscv";
 			reg = <14>;
 			device_type = "cpu";
 			clock-frequency = <DT_FREQ_M(320)>;
-			riscv,isa = "rv32emc";
+			riscv,isa-base = "rv32e";
+			riscv,isa-extensions = "e", "m", "c", "zicsr";
 			nordic,bus-width = <32>;
 
 			cpuflpr_vevif_rx: mailbox {
@@ -157,7 +159,7 @@
 	reserved-memory {
 		#address-cells = <1>;
 		#size-cells = <1>;
-		ranges = <>;
+		ranges;
 	};
 
 	clocks {
@@ -269,8 +271,11 @@
 		mram1x: mram@e000000 {
 			compatible = "nordic,mram";
 			reg = <0xe000000 DT_SIZE_K(2048)>;
+			ranges = <0x0 0xe000000 DT_SIZE_K(2048)>;
 			erase-block-size = <4096>;
 			write-block-size = <16>;
+			#address-cells = <1>;
+			#size-cells = <1>;
 		};
 
 		uicr: uicr@fff8000 {
@@ -408,7 +413,15 @@
 				compatible = "nordic,nrf-dppic-local";
 				reg = <0x22000 0x1000>;
 				channels = <32>;
+				groups = <4>;
 				status = "disabled";
+			};
+
+			ppib020: ppib@23000 {
+				compatible = "nordic,nrf-ppib";
+				reg = <0x23000 0x1000>;
+				status = "disabled";
+				channels = <16>;
 			};
 
 			cpurad_ipct: ipct@24000 {
@@ -497,6 +510,21 @@
 					compatible = "nordic,nrf-ieee802154";
 					status = "disabled";
 				};
+			};
+
+			ppib030: ppib@31000 {
+				compatible = "nordic,nrf-ppib";
+				reg = <0x31000 0x1000>;
+				status = "disabled";
+				channels = <16>;
+			};
+
+			dppic030: dppic@32000 {
+				compatible = "nordic,nrf-dppic-local";
+				reg = <0x32000 0x1000>;
+				channels = <16>;
+				groups = <1>;
+				status = "disabled";
 			};
 
 			ccm030: ccm@3a000 {
@@ -594,28 +622,28 @@
 					reg = <0x9000 0x1000>;
 				};
 
-				atbreplicator212: atbreplicator@A000 {
-					reg = <0xA000 0x1000>;
+				atbreplicator212: atbreplicator@a000 {
+					reg = <0xa000 0x1000>;
 				};
 
-				atbreplicator213: atbreplicator@B000 {
-					reg = <0xB000 0x1000>;
+				atbreplicator213: atbreplicator@b000 {
+					reg = <0xb000 0x1000>;
 				};
 
-				atbfunnel210: atbfunnel@C000 {
-					reg = <0xC000 0x1000>;
+				atbfunnel210: atbfunnel@c000 {
+					reg = <0xc000 0x1000>;
 				};
 
-				atbfunnel211: atbfunnel@D000 {
-					reg = <0xD000 0x1000>;
+				atbfunnel211: atbfunnel@d000 {
+					reg = <0xd000 0x1000>;
 				};
 
-				atbfunnel212: atbfunnel@E000 {
-					reg = <0xE000 0x1000>;
+				atbfunnel212: atbfunnel@e000 {
+					reg = <0xe000 0x1000>;
 				};
 
-				atbfunnel213: atbfunnel@F000 {
-					reg = <0xF000 0x1000>;
+				atbfunnel213: atbfunnel@f000 {
+					reg = <0xf000 0x1000>;
 				};
 			};
 		};
@@ -679,7 +707,7 @@
 				#clock-cells = <0>;
 				nordic,ficrs = <&ficr NRF_FICR_TRIM_GLOBAL_CANPLL_TRIM_CTUNE>;
 				nordic,frequency = <NRF_AUXPLL_FREQ_DIV_MIN>;
-				nordic,out-div = <NRF_AUXPLL_OUT_DIV_2>;
+				nordic,out-div = <2>;
 				nordic,out-drive = <0>;
 				nordic,current-tune = <6>;
 				nordic,sdm-disable;
@@ -737,6 +765,8 @@
 				compatible = "nordic,nrf-dppic-global";
 				reg = <0x8e1000 0x1000>;
 				status = "disabled";
+				channels = <8>;
+				groups = <2>;
 			};
 
 			timer120: timer@8e2000 {
@@ -825,6 +855,20 @@
 				nordic,clockpin-enable = <NRF_FUN_SPIM_SCK>;
 			};
 
+			ppib120: ppib@8ee000 {
+				compatible = "nordic,nrf-ppib";
+				reg = <0x8ee000 0x1000>;
+				status = "disabled";
+				channels = <4>;
+			};
+
+			ppib121: ppib@8ef000 {
+				compatible = "nordic,nrf-ppib";
+				reg = <0x8ef000 0x1000>;
+				status = "disabled";
+				channels = <8>;
+			};
+
 			cpuppr_vpr: vpr@908000 {
 				compatible = "nordic,nrf-vpr-coprocessor";
 				reg = <0x908000 0x1000>;
@@ -855,6 +899,22 @@
 				compatible = "nordic,nrf-dppic-global";
 				reg = <0x922000 0x1000>;
 				status = "disabled";
+				channels = <8>;
+				groups = <2>;
+			};
+
+			ppib130: ppib@925000 {
+				compatible = "nordic,nrf-ppib";
+				reg = <0x925000 0x1000>;
+				status = "disabled";
+				channels = <32>;
+			};
+
+			ppib131: ppib@926000 {
+				compatible = "nordic,nrf-ppib";
+				reg = <0x926000 0x1000>;
+				status = "disabled";
+				channels = <16>;
 			};
 
 			rtc130: rtc@928000 {
@@ -983,6 +1043,8 @@
 				compatible = "nordic,nrf-dppic-global";
 				reg = <0x981000 0x1000>;
 				status = "disabled";
+				channels = <8>;
+				groups = <2>;
 			};
 
 			adc: adc@982000 {
@@ -1031,10 +1093,19 @@
 				interrupts = <389 NRF_DEFAULT_IRQ_PRIORITY>;
 			};
 
+			ppib132: ppib@98d000 {
+				compatible = "nordic,nrf-ppib";
+				reg = <0x98d000 0x1000>;
+				status = "disabled";
+				channels = <8>;
+			};
+
 			dppic132: dppic@991000 {
 				compatible = "nordic,nrf-dppic-global";
 				reg = <0x991000 0x1000>;
 				status = "disabled";
+				channels = <8>;
+				groups = <2>;
 			};
 
 			pdm0: pdm@993000 {
@@ -1066,12 +1137,23 @@
 				cc-num = <16>;
 				clocks = <&lfclk>, <&fll16m>;
 				clock-names = "lfclock", "hfclock";
+				extended-channels = <0>;
+			};
+
+			ppib133: ppib@99d000 {
+				compatible = "nordic,nrf-ppib";
+				reg = <0x99d000 0x1000>;
+				status = "disabled";
+				channels = <8>;
+				offset = <8>;
 			};
 
 			dppic133: dppic@9a1000 {
 				compatible = "nordic,nrf-dppic-global";
 				reg = <0x9a1000 0x1000>;
 				status = "disabled";
+				channels = <8>;
+				groups = <2>;
 			};
 
 			timer130: timer@9a2000 {
@@ -1194,10 +1276,20 @@
 				zephyr,pm-device-runtime-auto;
 			};
 
+			ppib134: ppib@9ad000 {
+				compatible = "nordic,nrf-ppib";
+				reg = <0x9ad000 0x1000>;
+				status = "disabled";
+				channels = <8>;
+				offset = <16>;
+			};
+
 			dppic134: dppic@9b1000 {
 				compatible = "nordic,nrf-dppic-global";
 				reg = <0x9b1000 0x1000>;
 				status = "disabled";
+				channels = <8>;
+				groups = <2>;
 			};
 
 			timer132: timer@9b2000 {
@@ -1320,10 +1412,20 @@
 				zephyr,pm-device-runtime-auto;
 			};
 
+			ppib135: ppib@9bd000 {
+				compatible = "nordic,nrf-ppib";
+				reg = <0x9bd000 0x1000>;
+				status = "disabled";
+				channels = <8>;
+				offset = <24>;
+			};
+
 			dppic135: dppic@9c1000 {
 				compatible = "nordic,nrf-dppic-global";
 				reg = <0x9c1000 0x1000>;
 				status = "disabled";
+				channels = <8>;
+				groups = <2>;
 			};
 
 			timer134: timer@9c2000 {
@@ -1446,10 +1548,19 @@
 				zephyr,pm-device-runtime-auto;
 			};
 
+			ppib136: ppib@9cd000 {
+				compatible = "nordic,nrf-ppib";
+				reg = <0x9cd000 0x1000>;
+				status = "disabled";
+				channels = <8>;
+			};
+
 			dppic136: dppic@9d1000 {
 				compatible = "nordic,nrf-dppic-global";
 				reg = <0x9d1000 0x1000>;
 				status = "disabled";
+				channels = <8>;
+				groups = <2>;
 			};
 
 			timer136: timer@9d2000 {
@@ -1570,6 +1681,14 @@
 				endtx-stoptx-supported;
 				frame-timeout-supported;
 				zephyr,pm-device-runtime-auto;
+			};
+
+			ppib137: ppib@9dd000 {
+				compatible = "nordic,nrf-ppib";
+				reg = <0x9dd000 0x1000>;
+				status = "disabled";
+				channels = <8>;
+				offset = <8>;
 			};
 
 			tdm130: tdm@992000 {

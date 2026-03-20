@@ -9,6 +9,7 @@
 #include <zephyr/dt-bindings/pinctrl/renesas/pinctrl-ra.h>
 #include <zephyr/dt-bindings/clock/ra_clock.h>
 #include <zephyr/dt-bindings/pwm/ra_pwm.h>
+#include <zephyr/dt-bindings/i2c/i2c.h>
 #include <freq.h>
 
 / {
@@ -32,12 +33,6 @@
 
 	soc {
 		interrupt-parent = <&nvic>;
-
-		system: system@4001e000 {
-			compatible = "renesas,ra-system";
-			reg = <0x4001e000 0x1000>;
-			status = "okay";
-		};
 
 		elc: elc@40082000 {
 			compatible = "renesas,ra-elc";
@@ -154,6 +149,15 @@
 				channel = <0>;
 				status = "disabled";
 			};
+
+			spi {
+				compatible = "renesas,ra-spi-sci";
+				#address-cells = <1>;
+				#size-cells = <0>;
+				channel = <0>;
+				overrun-character = <0x00>;
+				status = "disabled";
+			};
 		};
 
 		sci9: sci9@40118900 {
@@ -175,6 +179,15 @@
 				#address-cells = <1>;
 				#size-cells = <0>;
 				channel = <9>;
+				status = "disabled";
+			};
+
+			spi {
+				compatible = "renesas,ra-spi-sci";
+				#address-cells = <1>;
+				#size-cells = <0>;
+				channel = <9>;
+				overrun-character = <0x00>;
 				status = "disabled";
 			};
 		};
@@ -354,6 +367,7 @@
 			compatible = "renesas,ra-iic";
 			channel = <0>;
 			reg = <0x4009f000 0x100>;
+			clocks = <&pclkb MSTPB 9>;
 			status = "disabled";
 		};
 
@@ -361,6 +375,8 @@
 			compatible = "renesas,ra-iic";
 			channel = <1>;
 			reg = <0x4009f100 0x100>;
+			clocks = <&pclkb MSTPB 8>;
+			max-bitrate-supported = <I2C_BITRATE_FAST>;
 			status = "disabled";
 		};
 

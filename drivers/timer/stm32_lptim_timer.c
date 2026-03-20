@@ -521,9 +521,8 @@ static int sys_clock_driver_init(void)
 	uint32_t count_per_tick;
 	int err;
 
-	if (!device_is_ready(clk_ctrl)) {
-		return -ENODEV;
-	}
+	/* Reset timer to default state using RCC */
+	(void)reset_line_toggle_dt(&lptim_reset);
 
 	/* Enable LPTIM bus clock */
 	err = clock_control_on(clk_ctrl, (clock_control_subsys_t) &lptim_clk[0]);
@@ -561,9 +560,6 @@ static int sys_clock_driver_init(void)
 		lptim_clock_freq = KHZ(32);
 	}
 #endif
-
-	/* Reset timer to default state using RCC */
-	(void)reset_line_toggle_dt(&lptim_reset);
 
 #if DT_PROP(DT_NODELABEL(stm32_lp_tick_source), st_timeout)
 	uint32_t timeout = DT_PROP(DT_NODELABEL(stm32_lp_tick_source), st_timeout);

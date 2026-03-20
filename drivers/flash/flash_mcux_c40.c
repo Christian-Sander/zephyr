@@ -313,7 +313,7 @@ static int flash_mcux_c40_init(const struct device *dev)
 	return 0;
 }
 
-static const struct flash_driver_api mcux_c40_api = {
+static DEVICE_API(flash, mcux_c40_api) = {
 	.read = flash_mcux_c40_read,
 	.write = flash_mcux_c40_write,
 	.erase = flash_mcux_c40_erase,
@@ -334,10 +334,10 @@ static const struct flash_driver_api mcux_c40_api = {
 		DT_NODE_HAS_STATUS(DT_NODELABEL(lbl), okay),					\
 		(COND_CODE_1(									\
 			DT_SAME_NODE(								\
-				DT_PARENT(DT_NODELABEL(lbl)),					\
+				DT_GPARENT(DT_NODELABEL(lbl)),					\
 				C40_FLASH_NODE(inst)),						\
-			({ .off  = (uint32_t)FIXED_PARTITION_OFFSET(lbl),			\
-			    .len  = (uint32_t)FIXED_PARTITION_SIZE(lbl),			\
+			({ .off  = (uint32_t)PARTITION_OFFSET(lbl),			\
+			    .len  = (uint32_t)PARTITION_SIZE(lbl),			\
 			    .name = #lbl },),							\
 			())									\
 		),										\

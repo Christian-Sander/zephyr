@@ -376,7 +376,6 @@ static struct net_buf *att_create_rsp_pdu(struct bt_att_chan *chan, uint8_t op);
 
 static void att_disconnect(struct bt_att_chan *chan)
 {
-	char addr[BT_ADDR_LE_STR_LEN];
 	int err;
 
 	/* In rare circumstances we are "forced" to disconnect the ATT bearer and the ACL.
@@ -385,8 +384,7 @@ static void att_disconnect(struct bt_att_chan *chan)
 	 * invalid
 	 */
 
-	bt_addr_le_to_str(bt_conn_get_dst(chan->att->conn), addr, sizeof(addr));
-	LOG_DBG("ATT disconnecting device %s", addr);
+	LOG_DBG("ATT disconnecting device %s", bt_addr_le_str(bt_conn_get_dst(chan->att->conn)));
 
 	bt_att_disconnected(&chan->chan.chan);
 
@@ -2433,6 +2431,11 @@ static uint8_t att_exec_write_rsp(struct bt_att_chan *chan, uint8_t flags)
 					    &chan->att->prep_queue,
 					    &reassembled_data);
 		if (err != BT_ATT_ERR_SUCCESS) {
+			/* Discard queued buffers */
+			do {
+				net_buf_unref(buf);
+				buf = net_buf_slist_get(&chan->att->prep_queue);
+			} while (buf != NULL);
 			send_err_rsp(chan, BT_ATT_OP_EXEC_WRITE_REQ,
 				     handle, err);
 			return 0;
@@ -3195,12 +3198,11 @@ static void att_chan_detach(struct bt_att_chan *chan)
 
 static void att_timeout(struct k_work *work)
 {
-	char addr[BT_ADDR_LE_STR_LEN];
 	struct k_work_delayable *dwork = k_work_delayable_from_work(work);
 	struct bt_att_chan *chan = CONTAINER_OF(dwork, struct bt_att_chan, timeout_work);
 
-	bt_addr_le_to_str(bt_conn_get_dst(chan->att->conn), addr, sizeof(addr));
-	LOG_ERR("ATT Timeout for device %s. Disconnecting...", addr);
+	LOG_ERR("ATT Timeout for device %s. Disconnecting...",
+		bt_addr_le_str(bt_conn_get_dst(chan->att->conn)));
 
 	/* BLUETOOTH SPECIFICATION Version 4.2 [Vol 3, Part F] page 480:
 	 *

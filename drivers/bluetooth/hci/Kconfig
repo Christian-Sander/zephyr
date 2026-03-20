@@ -173,10 +173,12 @@ config BT_ESP32
 	select BT_CTLR_PRIVACY_SUPPORT
 	select BT_CTLR_EXT_SCAN_FP_SUPPORT
 	select BT_CTLR_DATA_LEN_UPDATE_SUPPORT
+	select BT_CTLR_CONN_RSSI_SUPPORT
 	select BT_CTLR_ADV_EXT_SUPPORT if !SOC_SERIES_ESP32
 	select BT_CTLR_PHY_UPDATE_SUPPORT if !SOC_SERIES_ESP32
 	select BT_CTLR_EXT_REJ_IND_SUPPORT if !SOC_SERIES_ESP32
 	select BT_CTLR_PHY_2M_SUPPORT if !SOC_SERIES_ESP32
+	select BT_CTLR_PHY_CODED_SUPPORT if !SOC_SERIES_ESP32
 	select BT_CTLR_CHAN_SEL_2_SUPPORT if !SOC_SERIES_ESP32
 	help
 	  Espressif HCI bluetooth interface
@@ -257,18 +259,21 @@ config BT_AIROC
 	select UART                          if BT_H4
 	select UART_USE_RUNTIME_CONFIGURE    if BT_H4
 	select BT_HCI_SETUP
+	select BT_HCI_SET_PUBLIC_ADDR
 	select USE_INFINEON_ABSTRACTION_RTOS if BT_CYW208XX
 	select EVENTS                        if BT_CYW208XX
-	depends on DT_HAS_INFINEON_CYW43XXX_BT_HCI_ENABLED || DT_HAS_INFINEON_CYW208XX_HCI_ENABLED
+	depends on DT_HAS_INFINEON_BT_HCI_UART_ENABLED || DT_HAS_INFINEON_CYW208XX_HCI_ENABLED
 	help
 	  Infineon's AIROC™ Wi-Fi & combos portfolio integrates
 	  IEEE 802.11a/b/g/n/ac/ax Wi-Fi and Bluetooth® 5.2 in a single-chip
 	  solution to enable small-form-factor IoT designs.
+source "drivers/bluetooth/hci/Kconfig.bflb"
 source "drivers/bluetooth/hci/Kconfig.esp32"
 source "drivers/bluetooth/hci/Kconfig.infineon"
 source "drivers/bluetooth/hci/Kconfig.nxp"
 source "drivers/bluetooth/hci/Kconfig.stm32"
 source "drivers/bluetooth/hci/Kconfig.silabs"
+source "drivers/bluetooth/hci/Kconfig.bee"
 
 config BT_DRIVER_QUIRK_NO_AUTO_DLE
 	bool "Host auto-initiated Data Length Update quirk"
@@ -322,6 +327,7 @@ config BT_DRV_RX_STACK_SIZE
 	default BT_STM32_IPM_RX_STACK_SIZE if BT_STM32_IPM
 	default HCI_NXP_RX_STACK_SIZE if HCI_NXP_RX_THREAD
 	default 1024 if BT_SF32LB
+	default 1024 if BT_BFLB_BL70X
 	default 512
 	help
 	  Stack size for the HCI driver's RX thread.

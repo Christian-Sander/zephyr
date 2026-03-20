@@ -54,8 +54,7 @@
 		device_type = "memory";
 		reg = <0xd0000000 DT_SIZE_M(16)>;
 		zephyr,memory-region = "SDRAM2";
-		/* Frame buffer memory cache will cause screen flickering. */
-		zephyr,memory-attr = <DT_MEM_ARM(ATTR_MPU_RAM_NOCACHE)>;
+		zephyr,memory-attr = <DT_MEM_ARM(ATTR_MPU_RAM)>;
 	};
 
 	octo_nor: memory@90000000 {
@@ -96,8 +95,8 @@
 	};
 
 	aliases {
-		led0 = &blue_led;
-		led1 = &red_led;
+		led0 = &red_led;
+		led1 = &blue_led;
 		sw0 = &user_button;
 	};
 };

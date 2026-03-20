@@ -10,8 +10,8 @@
 
 / {
 	zephyr,user {
-		pwms = <&pwm0_1 0 PWM_MSEC(20) (PWM_POLARITY_NORMAL | PWM_IFX_TCPWM_OUTPUT_HIGHZ)>,
-		       <&pwm1_19 1 PWM_MSEC(20) (PWM_POLARITY_NORMAL | PWM_IFX_TCPWM_OUTPUT_HIGHZ)>;
+		pwms = <&pwm0_1 0 PWM_MSEC(6) (PWM_POLARITY_NORMAL | PWM_IFX_TCPWM_OUTPUT_HIGHZ)>,
+		       <&pwm1_19 1 PWM_MSEC(6) (PWM_POLARITY_NORMAL | PWM_IFX_TCPWM_OUTPUT_HIGHZ)>;
 		gpios = <&gpio_prt16 2 GPIO_ACTIVE_HIGH>,
 			<&gpio_prt15 3 GPIO_ACTIVE_HIGH>;
 	};
@@ -30,9 +30,6 @@
 
 &peri0_group1_16bit_1 {
 	status = "okay";
-	resource-type = <IFX_RSC_TCPWM>;
-	resource-instance = <0>;
-	resource-channel = <1>;
 	clock-div = <9600>;
 };
 
@@ -49,9 +46,6 @@
 
 &peri0_group1_16bit_2 {
 	status = "okay";
-	resource-type = <IFX_RSC_TCPWM>;
-	resource-instance = <1>;
-	resource-channel = <19>;
 	clock-div = <9600>;
 };
 
