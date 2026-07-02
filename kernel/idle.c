@@ -48,7 +48,11 @@ void idle(void *unused1, void *unused2, void *unused3)
 		 * unmasked.  It does not take a spinlock or other
 		 * higher level construct.
 		 */
+#if defined(CONFIG_ZERO_LATENCY_IRQS_ARMV6_M)
+		(void) arch_zli_lock();
+#else
 		(void) arch_irq_lock();
+#endif
 
 #ifdef CONFIG_PM
 		_kernel.idle = z_get_next_timeout_expiry();

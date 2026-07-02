@@ -32,6 +32,136 @@ extern void z_arm_reserved(void);
 #define REG_FROM_IRQ(irq) (irq / NUM_IRQS_PER_REG)
 #define BIT_FROM_IRQ(irq) (irq % NUM_IRQS_PER_REG)
 
+#if defined(CONFIG_ZERO_LATENCY_IRQS_ARMV6_M)
+/*
+ * ARMv6-M does not implement BASEPRI. Normal Cortex-M zero-latency IRQ support
+ * uses BASEPRI to mask regular interrupts while leaving selected high-priority
+ * interrupts unmasked. For ARMv6-M we emulate that behavior by changing the
+ * NVIC enable register directly while irq_lock() is active:
+ *
+ * - z_armv6m_zli_shadow_reg stores the logical NVIC enable state. While the
+ *   software lock is active, normal IRQ enable/disable operations update this
+ *   shadow instead of, or in addition to, the physical NVIC state.
+ * - z_armv6m_zli_mask contains the subset of IRQs marked IRQ_ZERO_LATENCY.
+ *   These IRQs remain physically enabled while regular IRQs are masked.
+ * - z_armv6m_zli_lock_flag tells arm_irq_enable()/arm_irq_disable() whether
+ *   the physical NVIC state is currently the masked software-lock state.
+ */
+static volatile uint32_t z_armv6m_zli_shadow_reg;
+static volatile uint32_t z_armv6m_zli_mask;
+static volatile bool z_armv6m_zli_lock_flag;
+
+/*
+ * SysTick is a system exception, not an external NVIC IRQ. Masking external
+ * IRQs in NVIC->ICER therefore does not block SysTick. To make irq_lock()
+ * behave like the BASEPRI implementation, save/disable TICKINT and also defer
+ * an already-pending SysTick exception until the software lock is released.
+ */
+static volatile bool z_armv6m_zli_systick_tickint;
+static volatile bool z_armv6m_zli_systick_pending;
+
+uint32_t z_armv6m_zli_get_shadow_reg(void)
+{
+	return z_armv6m_zli_shadow_reg;
+}
+
+void z_armv6m_zli_set_shadow_reg(uint32_t new_value)
+{
+	z_armv6m_zli_shadow_reg = new_value;
+}
+
+uint32_t z_armv6m_zli_get_mask(void)
+{
+	return z_armv6m_zli_mask;
+}
+
+bool z_armv6m_zli_is_zli(unsigned int irq)
+{
+	return (z_armv6m_zli_mask & BIT(BIT_FROM_IRQ(irq))) != 0U;
+}
+
+void z_armv6m_zli_set_lock_flag(bool new_value)
+{
+	z_armv6m_zli_lock_flag = new_value;
+}
+
+bool z_armv6m_zli_locked(void)
+{
+	return z_armv6m_zli_lock_flag;
+}
+
+/*
+ * Replace the physical NVIC enable state with irq_status.
+ *
+ * ICER clears all IRQs that are not present in irq_status, while ISER enables
+ * all IRQs that are present. During an ARMv6-M ZLI irq_lock(), callers pass
+ * shadow & zli_mask so only zero-latency IRQs remain enabled. On unlock, callers
+ * pass the full shadow state to restore regular IRQs as well.
+ */
+void z_armv6m_zli_set_irq_status(uint32_t irq_status)
+{
+	NVIC->ICER[0U] = ~irq_status;
+	NVIC->ISER[0U] = irq_status;
+}
+
+uint32_t z_armv6m_zli_get_irq_status(void)
+{
+	return NVIC->ISER[0U];
+}
+
+/*
+ * Restore the software IRQ lock state without going through arch_irq_unlock().
+ *
+ * Context-switch and idle paths already control PRIMASK explicitly. They need a
+ * helper that only restores the emulated BASEPRI state: physical NVIC enables,
+ * shadow bookkeeping, and deferred SysTick state.
+ */
+void z_armv6m_zli_unlock_swap(void)
+{
+	if (z_armv6m_zli_lock_flag) {
+		z_armv6m_zli_set_irq_status(z_armv6m_zli_shadow_reg);
+		z_armv6m_zli_shadow_reg = 0U;
+		z_armv6m_zli_lock_flag = false;
+		z_armv6m_zli_restore_systick_state();
+	}
+}
+
+/*
+ * Defer SysTick while the ARMv6-M software irq_lock() is active.
+ *
+ * Clearing TICKINT only prevents future SysTick exception entry. If SysTick was
+ * already pending before irq_lock(), it could still enter a kernel critical
+ * section. Save and clear the pending bit too, then restore it on unlock.
+ */
+void z_armv6m_zli_save_systick_state(void)
+{
+#if defined(CONFIG_CORTEX_M_SYSTICK)
+	z_armv6m_zli_systick_tickint = (SysTick->CTRL & SysTick_CTRL_TICKINT_Msk) != 0U;
+	z_armv6m_zli_systick_pending = (SCB->ICSR & SCB_ICSR_PENDSTSET_Msk) != 0U;
+	SysTick->CTRL &= ~SysTick_CTRL_TICKINT_Msk;
+	SCB->ICSR = SCB_ICSR_PENDSTCLR_Msk;
+#endif /* CONFIG_CORTEX_M_SYSTICK */
+}
+
+/* Restore the saved SysTick interrupt-enable and pending state. */
+void z_armv6m_zli_restore_systick_state(void)
+{
+#if defined(CONFIG_CORTEX_M_SYSTICK)
+	if (z_armv6m_zli_systick_tickint) {
+		SysTick->CTRL |= SysTick_CTRL_TICKINT_Msk;
+	} else {
+		SysTick->CTRL &= ~SysTick_CTRL_TICKINT_Msk;
+	}
+	if (z_armv6m_zli_systick_pending) {
+		SCB->ICSR = SCB_ICSR_PENDSTSET_Msk;
+	}
+	z_armv6m_zli_systick_tickint = false;
+	z_armv6m_zli_systick_pending = false;
+#endif /* CONFIG_CORTEX_M_SYSTICK */
+}
+
+#endif /* CONFIG_ZERO_LATENCY_IRQS_ARMV6_M */
+
 /*
  * For Cortex-M core, the default interrupt controller is the ARM
  * NVIC and therefore the architecture interrupt control functions
@@ -55,16 +185,39 @@ extern void z_arm_reserved(void);
 
 void arm_irq_enable(unsigned int irq)
 {
+#if defined(CONFIG_ZERO_LATENCY_IRQS_ARMV6_M)
+	if (z_armv6m_zli_locked()) {
+		z_armv6m_zli_shadow_reg |= BIT(BIT_FROM_IRQ(irq));
+		if (z_armv6m_zli_is_zli(irq)) {
+			NVIC_EnableIRQ((IRQn_Type)irq);
+		}
+		return;
+	}
+#endif /* CONFIG_ZERO_LATENCY_IRQS_ARMV6_M */
 	NVIC_EnableIRQ((IRQn_Type)irq);
 }
 
 void arm_irq_disable(unsigned int irq)
 {
+#if defined(CONFIG_ZERO_LATENCY_IRQS_ARMV6_M)
+	if (z_armv6m_zli_locked()) {
+		z_armv6m_zli_shadow_reg &= ~BIT(BIT_FROM_IRQ(irq));
+		if (z_armv6m_zli_is_zli(irq)) {
+			NVIC_DisableIRQ((IRQn_Type)irq);
+		}
+		return;
+	}
+#endif /* CONFIG_ZERO_LATENCY_IRQS_ARMV6_M */
 	NVIC_DisableIRQ((IRQn_Type)irq);
 }
 
 int arm_irq_is_enabled(unsigned int irq)
 {
+#if defined(CONFIG_ZERO_LATENCY_IRQS_ARMV6_M)
+	if (z_armv6m_zli_locked()) {
+		return z_armv6m_zli_shadow_reg & BIT(BIT_FROM_IRQ(irq));
+	}
+#endif /* CONFIG_ZERO_LATENCY_IRQS_ARMV6_M */
 	return NVIC->ISER[REG_FROM_IRQ(irq)] & BIT(BIT_FROM_IRQ(irq));
 }
 
@@ -98,6 +251,12 @@ void arm_irq_priority_set(unsigned int irq, unsigned int prio, uint32_t flags)
 	} else {
 		prio += _IRQ_PRIO_OFFSET;
 	}
+
+#if defined(CONFIG_ZERO_LATENCY_IRQS_ARMV6_M)
+	if ((flags & IRQ_ZERO_LATENCY) != 0U) {
+		z_armv6m_zli_mask |= BIT(BIT_FROM_IRQ(irq));
+	}
+#endif /* CONFIG_ZERO_LATENCY_IRQS_ARMV6_M */
 
 	/* The last priority level is also used by PendSV exception, but
 	 * allow other interrupts to use the same level, even if it ends up

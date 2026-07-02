@@ -54,6 +54,19 @@ extern void arm_irq_enable(unsigned int irq);
 extern void arm_irq_disable(unsigned int irq);
 extern int arm_irq_is_enabled(unsigned int irq);
 extern void arm_irq_priority_set(unsigned int irq, unsigned int prio, uint32_t flags);
+#if defined(CONFIG_ZERO_LATENCY_IRQS_ARMV6_M)
+uint32_t z_armv6m_zli_get_shadow_reg(void);
+void z_armv6m_zli_set_shadow_reg(uint32_t new_value);
+uint32_t z_armv6m_zli_get_mask(void);
+bool z_armv6m_zli_is_zli(unsigned int irq);
+void z_armv6m_zli_set_lock_flag(bool new_value);
+bool z_armv6m_zli_locked(void);
+void z_armv6m_zli_set_irq_status(uint32_t irq_status);
+uint32_t z_armv6m_zli_get_irq_status(void);
+void z_armv6m_zli_unlock_swap(void);
+void z_armv6m_zli_save_systick_state(void);
+void z_armv6m_zli_restore_systick_state(void);
+#endif /* CONFIG_ZERO_LATENCY_IRQS_ARMV6_M */
 #if !defined(CONFIG_MULTI_LEVEL_INTERRUPTS)
 #define arch_irq_enable(irq)                     arm_irq_enable(irq)
 #define arch_irq_disable(irq)                    arm_irq_disable(irq)
@@ -149,7 +162,8 @@ extern void z_arm_interrupt_init(void);
 
 #define ARCH_IRQ_DIRECT_CONNECT(irq_p, priority_p, isr_p, flags_p) \
 { \
-	BUILD_ASSERT(IS_ENABLED(CONFIG_ZERO_LATENCY_IRQS) || !(flags_p & IRQ_ZERO_LATENCY), \
+	BUILD_ASSERT(IS_ENABLED(CONFIG_ZERO_LATENCY_IRQS) || \
+		     !(flags_p & IRQ_ZERO_LATENCY), \
 			"ZLI interrupt registered but feature is disabled"); \
 	_CHECK_PRIO(priority_p, flags_p) \
 	Z_ISR_DECLARE_DIRECT(irq_p, ISR_FLAG_DIRECT, isr_p); \

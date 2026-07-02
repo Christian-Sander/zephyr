@@ -327,7 +327,7 @@ config GEN_ISR_TABLES
 
 config ZERO_LATENCY_IRQS
 	bool "Zero-latency interrupts"
-	depends on CPU_CORTEX_M_HAS_BASEPRI
+	depends on CPU_CORTEX_M
 	help
 	  The kernel may reserve some of the highest interrupts priorities in
 	  the system for its own use. These interrupts will not be masked
@@ -340,6 +340,19 @@ config ZERO_LATENCY_IRQS
 	  Since Zero-latency ISRs will run in the same priority or possibly at
 	  higher priority than the rest of the kernel they cannot use any
 	  kernel functionality.
+
+config ZERO_LATENCY_IRQS_ARMV6_M
+	bool
+	depends on ZERO_LATENCY_IRQS && (CPU_CORTEX_M0 || CPU_CORTEX_M0PLUS || CPU_CORTEX_M1)
+	depends on !ARM_CUSTOM_INTERRUPT_CONTROLLER
+	depends on !MULTI_LEVEL_INTERRUPTS
+	default y if ZERO_LATENCY_IRQS && (CPU_CORTEX_M0 || CPU_CORTEX_M0PLUS || CPU_CORTEX_M1)
+	help
+	  Enable zero-latency interrupt support on Cortex-M0,
+	  Cortex-M0+, and Cortex-M1 by masking normal IRQs in the NVIC while
+	  leaving IRQs registered with IRQ_ZERO_LATENCY enabled.
+	  This is an implementation detail and is not user-configurable. The
+	  public symbol is CONFIG_ZERO_LATENCY_IRQS.
 
 config ZERO_LATENCY_LEVELS
 	int "Number of interrupt priority levels reserved for zero latency"

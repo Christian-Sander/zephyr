@@ -204,6 +204,20 @@ SECTION_FUNC(TEXT, z_arm_pendsv)
 #endif
 
 #if defined(CONFIG_ARMV6_M_ARMV8_M_BASELINE)
+#if defined(CONFIG_ZERO_LATENCY_IRQS_ARMV6_M)
+    /*
+     * BASEPRI is not available. In ARMv6-M zero-latency IRQ mode,
+     * make sure the global software NVIC mask is released before
+     * returning to the incoming thread. Context switching with a
+     * non-zero irq_lock() key is invalid for this backend, as there is
+     * no per-thread NVIC mask state.
+     */
+    push {r2,lr}
+    bl z_armv6m_zli_unlock_swap
+    pop {r2,r3}
+    mov lr, r3
+    cpsie i
+#else
     /* BASEPRI not available, previous interrupt disable state
      * maps to PRIMASK.
      *
@@ -214,6 +228,7 @@ SECTION_FUNC(TEXT, z_arm_pendsv)
     bne .L_thread_irq_disabled
     cpsie i
 .L_thread_irq_disabled:
+#endif /* CONFIG_ZERO_LATENCY_IRQS_ARMV6_M */
 
 #if defined(CONFIG_MPU_STACK_GUARD) || defined(CONFIG_USERSPACE)
     /* Re-program dynamic memory map */

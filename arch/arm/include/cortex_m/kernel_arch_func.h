@@ -90,11 +90,26 @@ static ALWAYS_INLINE int arch_swap(unsigned int key)
 	_current->arch.basepri = key;
 	_current->arch.swap_return_value = -EAGAIN;
 
+#if defined(CONFIG_ZERO_LATENCY_IRQS_ARMV6_M)
+	/*
+	 * In ARMv6-M zero-latency IRQ mode, irq_lock() does not mask PendSV.
+	 * Pend PendSV and restore the software IRQ lock state while PRIMASK
+	 * is set, then force-enable exceptions so PendSV is taken before this
+	 * thread continues executing.
+	 */
+	__disable_irq();
+	SCB->ICSR |= SCB_ICSR_PENDSVSET_Msk;
+	z_armv6m_zli_unlock_swap();
+	__DSB();
+	__enable_irq();
+	__ISB();
+#else
 	/* set pending bit to make sure we will take a PendSV exception */
 	SCB->ICSR |= SCB_ICSR_PENDSVSET_Msk;
 
 	/* clear mask or enable all irqs to take a pendsv */
 	irq_unlock(0);
+#endif
 
 	/* Context switch is performed here. Returning implies the
 	 * thread has been context-switched-in again.

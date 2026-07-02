@@ -57,6 +57,10 @@ Z_GENERIC_SECTION(.text._HandlerModeExit) void z_arm_exc_exit(void)
 #ifdef CONFIG_PREEMPT_ENABLED
 	if (_kernel.ready_q.cache != _kernel.cpus->current) {
 		SCB->ICSR |= SCB_ICSR_PENDSVSET_Msk;
+#if defined(CONFIG_ZERO_LATENCY_IRQS_ARMV6_M)
+		__DSB();
+		__ISB();
+#endif /* CONFIG_ZERO_LATENCY_IRQS_ARMV6_M */
 	}
 #endif /* CONFIG_PREEMPT_ENABLED */
 

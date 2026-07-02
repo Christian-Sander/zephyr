@@ -182,10 +182,10 @@ static inline void unpend_thread_no_timeout(struct k_thread *thread)
 static ALWAYS_INLINE struct k_thread *z_unpend_first_thread(_wait_q_t *wait_q)
 {
 	struct k_thread *thread = NULL;
-
+#if !defined(CONFIG_ZERO_LATENCY_IRQS_ARMV6_M)
 	__ASSERT_EVAL(, int key = arch_irq_lock(); arch_irq_unlock(key),
 		      !arch_irq_unlocked(key), "");
-
+#endif
 	LOCK_SCHED_SPINLOCK {
 		thread = _priq_wait_best(&wait_q->waitq);
 		if (unlikely(thread != NULL)) {
