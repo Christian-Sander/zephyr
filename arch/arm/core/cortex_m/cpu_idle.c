@@ -10,7 +10,6 @@
  * @brief ARM Cortex-M power management
  */
 #include <zephyr/kernel.h>
-#include <zephyr/irq.h>
 #include <cmsis_core.h>
 
 #if defined(CONFIG_ARM_ON_EXIT_CPU_IDLE)
@@ -89,11 +88,10 @@ void arch_cpu_idle(void)
 	__ISB();
 #elif defined(CONFIG_ZERO_LATENCY_IRQS_ARMV6_M)
 	/*
-	 * The idle thread enters here after arch_irq_lock(). In ARMv6-M
-	 * zero-latency IRQ mode that masks normal IRQs in the NVIC instead
-	 * of using PRIMASK, so release the software NVIC mask before WFI.
+	 * The idle thread enters here after arch_zli_lock(), so only PRIMASK
+	 * is set. Enable interrupts before WFI without touching the ARMv6-M
+	 * zero-latency NVIC shadow state.
 	 */
-	z_armv6m_zli_unlock_swap();
 	__enable_irq();
 	__ISB();
 #else
