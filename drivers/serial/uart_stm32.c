@@ -2579,35 +2579,31 @@ static int uart_stm32_pm_action(const struct device *dev, enum pm_device_action 
 #endif /* CONFIG_UART_ASYNC_API */
 
 #if defined(CONFIG_UART_INTERRUPT_DRIVEN) || defined(CONFIG_UART_ASYNC_API) || defined(CONFIG_PM)
-#if defined(CONFIG_ZERO_LATENCY_IRQS)
-#define STM32_UART_IRQ_IS_ZERO_LATENCY(index) \
-	(DT_INST_IRQ(index, priority) < ZERO_LATENCY_LEVELS)
 
 #define STM32_UART_ZLI_IRQ_HANDLER_DEFINE(index) \
+COND_CODE_1(DT_INST_PROP(index, zli), (\
 	ISR_DIRECT_DECLARE(uart_stm32_isr_direct_##index) \
 	{ \
 		uart_stm32_isr(DEVICE_DT_INST_GET(index)); \
 		return 0; \
-	}
-#else
-#define STM32_UART_IRQ_IS_ZERO_LATENCY(index) 0
-#define STM32_UART_ZLI_IRQ_HANDLER_DEFINE(index)
-#endif
+	}), ());
+
+#define STM32_UART_IRQ_CONNECT(idx)						       \
+	COND_CODE_1(DT_INST_PROP(idx, zli),				       \
+		(IRQ_DIRECT_CONNECT(DT_INST_IRQN(idx),			       \
+				    DT_INST_IRQ(idx, priority),		       \
+				    uart_stm32_isr_direct_##idx,	       \
+				    IRQ_ZERO_LATENCY)),			       \
+		(IRQ_CONNECT(DT_INST_IRQN(idx), DT_INST_IRQ(idx, priority),    \
+			    uart_stm32_isr, DEVICE_DT_INST_GET(idx), 0))	       \
+	)
 
 #define STM32_UART_IRQ_HANDLER_DEFINE(index)					\
 	STM32_UART_ZLI_IRQ_HANDLER_DEFINE(index)				\
 	static void uart_stm32_irq_config_func_##index(const struct device *dev)\
 	{									\
 		ARG_UNUSED(dev);						\
-		if (STM32_UART_IRQ_IS_ZERO_LATENCY(index)) {			\
-			IRQ_DIRECT_CONNECT(DT_INST_IRQN(index),			\
-					   DT_INST_IRQ(index, priority),		\
-					   uart_stm32_isr_direct_##index,		\
-					   IRQ_ZERO_LATENCY);				\
-		} else {							\
-			IRQ_CONNECT(DT_INST_IRQN(index), DT_INST_IRQ(index, priority),\
-				    uart_stm32_isr, DEVICE_DT_INST_GET(index), 0);	\
-		}								\
+		STM32_UART_IRQ_CONNECT(index); \
 		irq_enable(DT_INST_IRQN(index));				\
 	}
 
