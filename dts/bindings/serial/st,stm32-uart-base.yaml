@@ -106,6 +106,6 @@ properties:
       delays.
       In RX, FIFO reduces overrun occurrences.
       
-  zli:
+  zephyr,zli:
     type: boolean
     description: Enable event handler in the ZLI (Zero latency interrupt) context

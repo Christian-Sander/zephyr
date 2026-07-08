@@ -2581,7 +2581,7 @@ static int uart_stm32_pm_action(const struct device *dev, enum pm_device_action 
 #if defined(CONFIG_UART_INTERRUPT_DRIVEN) || defined(CONFIG_UART_ASYNC_API) || defined(CONFIG_PM)
 
 #define STM32_UART_ZLI_IRQ_HANDLER_DEFINE(index) \
-COND_CODE_1(DT_INST_PROP(index, zli), (\
+COND_CODE_1(DT_INST_PROP(index, zephyr_zli), (\
 	ISR_DIRECT_DECLARE(uart_stm32_isr_direct_##index) \
 	{ \
 		uart_stm32_isr(DEVICE_DT_INST_GET(index)); \
@@ -2589,7 +2589,7 @@ COND_CODE_1(DT_INST_PROP(index, zli), (\
 	}), ());
 
 #define STM32_UART_IRQ_CONNECT(idx)						       \
-	COND_CODE_1(DT_INST_PROP(idx, zli),				       \
+	COND_CODE_1(DT_INST_PROP(idx, zephyr_zli),				       \
 		(IRQ_DIRECT_CONNECT(DT_INST_IRQN(idx),			       \
 				    DT_INST_IRQ(idx, priority),		       \
 				    uart_stm32_isr_direct_##idx,	       \
