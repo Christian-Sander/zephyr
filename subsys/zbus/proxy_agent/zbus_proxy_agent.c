@@ -124,9 +124,6 @@ static void ack_work_handler(struct k_work *work)
 
 		LOG_DBG("Sent %s for message ID %d", response_type_str, queued_response.msg_id);
 	}
-
-	LOG_DBG("Sent %s for message ID %d", response_type_str,
-		config->response.pending_response_msg_id);
 }
 
 static int schedule_ack(struct zbus_proxy_agent_config *config, uint32_t msg_id,
@@ -301,28 +298,35 @@ static int zbus_proxy_agent_tracking_pool_init(struct zbus_proxy_agent_config *c
 
 static int zbus_proxy_agent_stop_tracking(struct zbus_proxy_agent_config *config, uint32_t msg_id)
 {
-	struct net_buf *buf, *tmp;
+	struct net_buf *buf, *tmp, *found_buf = NULL;
+	struct zbus_proxy_agent_tracked_msg *data;
+	struct k_work_sync sync;
 	sys_snode_t *prev = NULL;
 	uint32_t *msg_id_ptr;
+	unsigned int key;
 
+	key = irq_lock();
 	SYS_SLIST_FOR_EACH_CONTAINER_SAFE(&config->tracking.tracking_msg_list, buf, tmp, node) {
 		msg_id_ptr = net_buf_user_data(buf);
 
 		if (*msg_id_ptr == msg_id) {
-			struct zbus_proxy_agent_tracked_msg *data =
-				(struct zbus_proxy_agent_tracked_msg *)buf->data;
-			struct k_work_sync sync;
-
-			k_work_cancel_delayable_sync(&data->work, &sync);
 			sys_slist_remove(&config->tracking.tracking_msg_list, prev, &buf->node);
-			net_buf_unref(buf);
-			return 0;
+			found_buf = buf;
+			break;
 		}
 		prev = &buf->node;
 	}
+	irq_unlock(key);
 
-	LOG_DBG("Message ID %d not found in tracking list", msg_id);
-	return -ENOENT;
+	if (found_buf == NULL) {
+		LOG_WRN("Message ID %d not found in tracking list", msg_id);
+		return -ENOENT;
+	}
+
+	data = (struct zbus_proxy_agent_tracked_msg *)found_buf->data;
+	k_work_cancel_delayable_sync(&data->work, &sync);
+	net_buf_unref(found_buf);
+	return 0;
 }
 
 static int schedule_timeout_work(struct zbus_proxy_agent_tracked_msg *data, uint8_t attempts)
