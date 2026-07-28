@@ -154,7 +154,7 @@ static int schedule_ack(struct zbus_proxy_agent_config *config, uint32_t msg_id,
 	}
 
 	ret = k_work_submit(&config->response.response_work);
-	if (ret < 0) {
+	if (ret != 1) {
 		LOG_ERR("Failed to schedule response work: %d", ret);
 		return ret;
 	}
