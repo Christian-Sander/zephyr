@@ -75,6 +75,7 @@ static void ack_work_handler(struct k_work *work)
 {
 	struct zbus_proxy_agent_config *config =
 		CONTAINER_OF(work, struct zbus_proxy_agent_config, response.response_work);
+	struct zbus_proxy_agent_response_msg queued_response;
 	struct zbus_proxy_agent_msg response_msg;
 	int ret;
 	const char *response_type_str;
@@ -91,34 +92,37 @@ static void ack_work_handler(struct k_work *work)
 		return;
 	}
 
-	if (config->response.pending_response_type == ZBUS_PROXY_AGENT_MSG_TYPE_ACK) {
-		ret = zbus_create_proxy_agent_ack_msg(&response_msg,
-						      config->response.pending_response_msg_id);
-		response_type_str = "ACK";
-	} else if (config->response.pending_response_type == ZBUS_PROXY_AGENT_MSG_TYPE_NACK) {
-		ret = zbus_create_proxy_agent_nack_msg(&response_msg,
-						       config->response.pending_response_msg_id);
-		response_type_str = "NACK";
-	} else {
-		LOG_ERR("Invalid response type: %d", config->response.pending_response_type);
-		return;
-	}
-	if (ret < 0) {
-		LOG_ERR("Failed to create %s message: %d", response_type_str, ret);
-		return;
-	}
+	while (k_msgq_get(&config->response.response_msgq, &queued_response, K_NO_WAIT) == 0) {
+		if (queued_response.response_type == ZBUS_PROXY_AGENT_MSG_TYPE_ACK) {
+			ret = zbus_create_proxy_agent_ack_msg(&response_msg, queued_response.msg_id);
+			response_type_str = "ACK";
+		} else if (queued_response.response_type == ZBUS_PROXY_AGENT_MSG_TYPE_NACK) {
+			ret = zbus_create_proxy_agent_nack_msg(&response_msg, queued_response.msg_id);
+			response_type_str = "NACK";
+		} else {
+			LOG_ERR("Invalid response type: %d", queued_response.response_type);
+			continue;
+		}
+		if (ret < 0) {
+			LOG_ERR("Failed to create %s message: %d", response_type_str, ret);
+			continue;
+		}
 
-	serialized_size = serialize_proxy_agent_msg(&response_msg, raw_buffer, sizeof(raw_buffer));
-	if (serialized_size <= 0) {
-		LOG_ERR("Failed to serialize %s message", response_type_str);
-		return;
-	}
+		serialized_size = serialize_proxy_agent_msg(&response_msg, raw_buffer,
+							      sizeof(raw_buffer));
+		if (serialized_size <= 0) {
+			LOG_ERR("Failed to serialize %s message", response_type_str);
+			continue;
+		}
 
-	ret = config->backend.backend_api->backend_send(config->backend.backend_config, raw_buffer,
-							serialized_size);
-	if (ret < 0) {
-		LOG_ERR("Failed to send %s message: %d", response_type_str, ret);
-		return;
+		ret = config->backend.backend_api->backend_send(config->backend.backend_config,
+								raw_buffer, serialized_size);
+		if (ret < 0) {
+			LOG_ERR("Failed to send %s message: %d", response_type_str, ret);
+			continue;
+		}
+
+		LOG_DBG("Sent %s for message ID %d", response_type_str, queued_response.msg_id);
 	}
 
 	LOG_DBG("Sent %s for message ID %d", response_type_str,
@@ -141,8 +145,16 @@ static int schedule_ack(struct zbus_proxy_agent_config *config, uint32_t msg_id,
 		return -EINVAL;
 	}
 
-	config->response.pending_response_msg_id = msg_id;
-	config->response.pending_response_type = response_type;
+	struct zbus_proxy_agent_response_msg response = {
+		.msg_id = msg_id,
+		.response_type = response_type,
+	};
+
+	ret = k_msgq_put(&config->response.response_msgq, &response, K_NO_WAIT);
+	if (ret < 0) {
+		LOG_ERR("Response queue full, dropping response for message ID %d: %d", msg_id, ret);
+		return ret;
+	}
 
 	ret = k_work_submit(&config->response.response_work);
 	if (ret < 0) {
@@ -505,6 +517,10 @@ static int zbus_proxy_agent_init(struct zbus_proxy_agent_config *config)
 	}
 
 	k_work_init(&config->response.response_work, ack_work_handler);
+	k_msgq_init(&config->response.response_msgq, config->response.response_msgq_buffer,
+		    sizeof(struct zbus_proxy_agent_response_msg),
+		    config->response.response_msgq_buffer_size /
+			    sizeof(struct zbus_proxy_agent_response_msg));
 
 	k_msgq_init(&config->receive.receive_msgq, config->receive.receive_msgq_buffer,
 		    sizeof(struct zbus_proxy_agent_msg),

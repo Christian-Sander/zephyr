@@ -100,17 +100,31 @@ struct zbus_proxy_agent_receive_config {
 };
 
 /**
+ * @brief ACK/NACK response queued for transmission.
+ */
+struct zbus_proxy_agent_response_msg {
+	/** Message ID being acknowledged */
+	uint32_t msg_id;
+
+	/** Response type, ACK or NACK */
+	uint8_t response_type;
+};
+
+/**
  * @brief Response handling state for proxy agent
  */
 struct zbus_proxy_agent_response_state {
 	/** Work item for sending ACK/NACK responses asynchronously */
 	struct k_work response_work;
 
-	/** Message ID for pending response */
-	uint32_t pending_response_msg_id;
+	/** Message queue for pending ACK/NACK responses */
+	struct k_msgq response_msgq;
 
-	/** Type of pending response (ACK or NACK) */
-	uint8_t pending_response_type;
+	/** Buffer for the response message queue */
+	char *response_msgq_buffer;
+
+	/** Size of the response message queue buffer */
+	size_t response_msgq_buffer_size;
 };
 
 /**
@@ -185,6 +199,8 @@ struct zbus_proxy_agent_config {
 					  CONFIG_ZBUS_PROXY_AGENT_CHANNEL_NAME_SIZE + 16];         \
 	static char _name##_cleanup_msgq_buf[CONFIG_ZBUS_PROXY_AGENT_CLEANUP_QUEUE_SIZE *          \
 					       sizeof(uint32_t)];                                  \
+	static char _name##_response_msgq_buf[CONFIG_ZBUS_PROXY_AGENT_RECEIVE_QUEUE_SIZE *         \
+					       sizeof(struct zbus_proxy_agent_response_msg)];       \
 	static K_THREAD_STACK_DEFINE(_name##_thread_stack, CONFIG_ZBUS_PROXY_AGENT_STACK_SIZE);		\
 	static struct k_thread _name##_thread;										\
 	static k_tid_t _name##_thread_id;  												\
@@ -212,8 +228,8 @@ struct zbus_proxy_agent_config {
 			},                                                                         \
 		.response =                                                                        \
 			{                                                                          \
-				.pending_response_msg_id = 0,                                      \
-				.pending_response_type = 0,                                        \
+				.response_msgq_buffer = _name##_response_msgq_buf,                 \
+				.response_msgq_buffer_size = sizeof(_name##_response_msgq_buf),    \
 			},                                                                         \
 		.duplicate_detection =                                                             \
 			{                                                                          \
